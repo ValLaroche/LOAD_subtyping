@@ -1,18 +1,20 @@
-quant_to_heatmap=function(quant_matrix, discrimination, label_disc, label_disc2, 
+library(ggdendro)
+
+quant_to_heatmap=function(res_clustering, discrimination, label_disc, label_disc2, 
                           transformation="scale", rainbow_color_palette, 
                           all_genes, output, sublist_biomart = NULL){
   
-  tmp_counts = quant_matrix[,2:ncol(quant_matrix)]
+  tmp_counts = res_clustering[,2:ncol(res_clustering)]
   tmp_counts = data.frame(lapply(tmp_counts, function(x) {as.numeric(x)}))
-  quant_matrix = data.frame(cbind(quant_matrix[,1], tmp_counts))
-  colnames(quant_matrix)[1] = "Transcript"
+  res_clustering = data.frame(cbind(res_clustering[,1], tmp_counts))
+  colnames(res_clustering)[1] = "Transcript"
   
-  scaled_quant_matrix=quant_matrix
+  scaled_res_clustering=res_clustering
   
   
   if(transformation=="scale"){
     
-    tmp_matrix = scaled_quant_matrix[,2:ncol(scaled_quant_matrix)]
+    tmp_matrix = scaled_res_clustering[,2:ncol(scaled_res_clustering)]
     
     tmp_matrix = t(tmp_matrix)
     tmp_matrix = scale(tmp_matrix, center = TRUE, scale = TRUE)
@@ -22,22 +24,22 @@ quant_to_heatmap=function(quant_matrix, discrimination, label_disc, label_disc2,
     tmp_matrix[tmp_matrix > 2]=2
     tmp_matrix[tmp_matrix < -2]=-2
     
-    scaled_quant_matrix = data.frame(scaled_quant_matrix[,1], tmp_matrix)
-    colnames(scaled_quant_matrix)[1] = "Transcript"
+    scaled_res_clustering = data.frame(scaled_res_clustering[,1], tmp_matrix)
+    colnames(scaled_res_clustering)[1] = "Transcript"
   }
   if(transformation=="log"){
-    scaled_quant_matrix[, c(2:ncol(quant_matrix))]=
-      log2(quant_matrix[, 2:ncol(quant_matrix)]+1)
-    scaled_quant_matrix[is.na(scaled_quant_matrix)]=0
-    scaled_quant_matrix=scaled_quant_matrix %>% 
+    scaled_res_clustering[, c(2:ncol(res_clustering))]=
+      log2(res_clustering[, 2:ncol(res_clustering)]+1)
+    scaled_res_clustering[is.na(scaled_res_clustering)]=0
+    scaled_res_clustering=scaled_res_clustering %>% 
       mutate_if(is.numeric, function(x) ifelse(is.infinite(x), 0, x))
   }
   
   
   
-  new_quant_matrix=as.matrix(scaled_quant_matrix[-1])
-  rownames(new_quant_matrix)=quant_matrix$Transcript
-  quant_h_clust=hclust(d=dist(x=new_quant_matrix),method="ward.D2")
+  new_res_clustering=as.matrix(scaled_res_clustering[-1])
+  rownames(new_res_clustering)=res_clustering$Transcript
+  quant_h_clust=hclust(d=dist(x=new_res_clustering),method="ward.D2")
   quant_dendro=as.dendrogram(quant_h_clust)
   
   dendro_plot=ggdendrogram(data=quant_dendro, rotate=TRUE)
@@ -47,20 +49,20 @@ quant_to_heatmap=function(quant_matrix, discrimination, label_disc, label_disc2,
   labels = data_dendro$labels
   labels$label = as.character(labels$label)
   
-  melted_quant_matrix=melt(scaled_quant_matrix)
+  melted_res_clustering=melt(scaled_res_clustering, id.vars = "Transcript")
   
   dendro_plot=dendro_plot + 
     theme_void()+
-    scale_x_continuous(expand = c(0.5/length(unique(melted_quant_matrix$Transcript)), 
-                                  0.5/length(unique(melted_quant_matrix$Transcript)))) +
+    scale_x_continuous(expand = c(0.5/length(unique(melted_res_clustering$Transcript)), 
+                                  0.5/length(unique(melted_res_clustering$Transcript)))) +
     theme(axis.text.y = element_blank(),
           axis.title.y = element_blank(),
           axis.ticks.y = element_blank(),
           axis.text.x = element_blank(),
           legend.position = 'none')
   
-  transposed_quant_matrix=t(as.matrix(new_quant_matrix))
-  label_h_clust=hclust(d=dist(transposed_quant_matrix),method="ward.D2")
+  transposed_res_clustering=t(as.matrix(new_res_clustering))
+  label_h_clust=hclust(d=dist(transposed_res_clustering),method="ward.D2")
   label_dendro=as.dendrogram(label_h_clust)
   
   clusters_evaluate = cutree(label_dendro, k=2)
@@ -94,14 +96,14 @@ quant_to_heatmap=function(quant_matrix, discrimination, label_disc, label_disc2,
           axis.text.x = element_blank(),
           legend.position = 'none')
   
-  colnames(melted_quant_matrix)[1] = "Transcript"
-  melted_quant_matrix$Transcript=factor(x=melted_quant_matrix$Transcript, 
-                                        levels=unique(scaled_quant_matrix$Transcript[order.dendrogram(quant_dendro)]))
+  colnames(melted_res_clustering)[1] = "Transcript"
+  melted_res_clustering$Transcript=factor(x=melted_res_clustering$Transcript, 
+                                        levels=unique(scaled_res_clustering$Transcript[order.dendrogram(quant_dendro)]))
   
-  melted_quant_matrix$variable=factor(x=melted_quant_matrix$variable, 
-                                      levels=rownames(transposed_quant_matrix[order.dendrogram(label_dendro),]))
+  melted_res_clustering$variable=factor(x=melted_res_clustering$variable, 
+                                      levels=rownames(transposed_res_clustering[order.dendrogram(label_dendro),]))
   
-  res=ggplot(melted_quant_matrix, aes(x=variable, y=Transcript, fill=value))+
+  res=ggplot(melted_res_clustering, aes(x=variable, y=Transcript, fill=value))+
     geom_tile(size=0.2)+
     {if(transformation == "log")scale_fill_gradientn(colours  = rainbow_color_palette, na.value = "black")} +
     {if(transformation == "scale")scale_fill_gradient2(low = rainbow_color_palette[[1]], 
@@ -116,7 +118,7 @@ quant_to_heatmap=function(quant_matrix, discrimination, label_disc, label_disc2,
           axis.text.x = element_blank(),
           legend.position = 'none')
   
-  panel=as.factor(as.vector(sapply(melted_quant_matrix$variable,function(x) 
+  panel=as.factor(as.vector(sapply(melted_res_clustering$variable,function(x) 
     paste(strsplit(as.character(x),"_")[[1]][discrimination],collapse="_"))))
   cond1=lapply(panel, function(x){
     strsplit(as.character(x), '_')[[1]][1]
@@ -131,7 +133,7 @@ quant_to_heatmap=function(quant_matrix, discrimination, label_disc, label_disc2,
   panel_df=data.frame(cond1=as.character(cond1), 
                       cond2=as.character(cond2), 
                       cond3=as.character(cond3), 
-                      sample=melted_quant_matrix$variable)
+                      sample=melted_res_clustering$variable)
   
   cond1_nb_cols=length(unique(cond1))
   
@@ -217,8 +219,8 @@ quant_to_heatmap=function(quant_matrix, discrimination, label_disc, label_disc2,
                                  size=4, y=1,hjust = "inward",
                                  vjust = 0, angle = 0)+
       theme_void()+
-      scale_x_continuous(expand = c(0.5/length(unique(melted_quant_matrix$Transcript)), 
-                                    0.5/length(unique(melted_quant_matrix$Transcript)))) +
+      scale_x_continuous(expand = c(0.5/length(unique(melted_res_clustering$Transcript)), 
+                                    0.5/length(unique(melted_res_clustering$Transcript)))) +
       coord_flip()
   } else {
     label_row = ggplot() + theme_minimal()
@@ -231,10 +233,10 @@ quant_to_heatmap=function(quant_matrix, discrimination, label_disc, label_disc2,
                                aes(x=x, label=label), 
                                size=4, y=1, hjust = 1,vjust = 0.5,angle = 90)+
     theme_void()+
-    scale_x_continuous(expand = c(0.5/length(unique(melted_quant_matrix$variable)), 
-                                  0.5/length(unique(melted_quant_matrix$variable)))) 
+    scale_x_continuous(expand = c(0.5/length(unique(melted_res_clustering$variable)), 
+                                  0.5/length(unique(melted_res_clustering$variable)))) 
   
-  plot_legend=ggplot(melted_quant_matrix, aes(x=variable, y=Transcript)) +
+  plot_legend=ggplot(melted_res_clustering, aes(x=variable, y=Transcript)) +
     labs(fill="Relative expression") +
     geom_tile(aes(fill=value),color="black",size=0.1) +
     scale_x_discrete(expand = c(0, 0)) +

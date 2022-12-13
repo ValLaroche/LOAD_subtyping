@@ -6,20 +6,21 @@ aff_matrix_calc <- function(dataset){
   return(aff_matrix)
 }
 
-Spectrum_modelization <- function(datasets, spectrum_method = 3, cluster_alg = "GMM"){
-  spec_model = Spectrum(datasets, method = spectrum_method, silent = FALSE,
-               showres = TRUE, diffusion = TRUE,
-               kerneltype = c("stsc"),
-               maxk = 10, NN = 3, NN2 = 7, showpca = T,
-               frac = 2, thresh = 7, fontsize = 18, dotsize = 3,
-               tunekernel = FALSE, clusteralg = cluster_alg, FASP = FALSE, FASPk = NULL, fixk = 3, KNNs_p = 15)
+Spectrum_modelization <- function(list_datasets, spectrum_method = 3, cluster_alg = "GMM", num_clusters = 2){
   
+  spec_model = Spectrum(list_datasets, method = spectrum_method, silent = FALSE,
+                 showres = TRUE, diffusion = TRUE,
+                 kerneltype = c("stsc"),
+                 maxk = 10, NN = 10, NN2 = 10, showpca = T,
+                 frac = 2, thresh = 7, fontsize = 18, dotsize = 3,
+                 tunekernel = FALSE, clusteralg = cluster_alg, FASP = FALSE, FASPk = NULL, fixk = num_clusters, KNNs_p = 15)
+    
   names(spec_model$assignments) = colnames(spec_model$similarity_matrix)
-          
+  
   return(spec_model)
 }
 
-SNF_modelization <- function(datasets_sim_matrix, K = 20, t = 20, num_clusters = 2){
+SNF_modelization <- function(datasets_sim_matrix, K = 20, t = 20, num_clusters = 4){
   snf_model_matrix = SNF(datasets_sim_matrix, K, t)
   
   snf_model_clusters = spectralClustering(snf_model_matrix, num_clusters)
@@ -34,16 +35,23 @@ SNF_modelization <- function(datasets_sim_matrix, K = 20, t = 20, num_clusters =
   return(snf_model)
 }
 
-ANF_modelization <- function(datasets_aff_matrix, K = 20, num_clusters = 2){
-  anf_model_matrix = ANF(Wall = datasets_aff_matrix, K = K)
+ANF_modelization <- function(list_aff_matrix, K = 20, num_clusters = 2){
   
-  anf_model_clusters = spectral_clustering(anf_model_matrix, num_clusters)
+  list_ANF_model = list()
   
-  names(anf_model_clusters) = colnames(anf_model_matrix)
+  for(i in seq(2:length(num_clusters))){
+    anf_model_matrix = ANF(Wall = list_aff_matrix, K = K, verbose = T)
+    
+    anf_model_clusters = spectral_clustering(anf_model_matrix, num_clusters[i])
+    
+    names(anf_model_clusters) = colnames(anf_model_matrix)
+    
+    anf_model = list(anf_model_matrix, anf_model_clusters)
   
-  anf_model = list(anf_model_matrix, anf_model_clusters)
+    list_ANF_model[[length(list_ANF_model) + 1]] = anf_model
+  }
   
-  return(anf_model)
+  return(list_ANF_model)
 }
 
 CC_modelization <- function(datasets, title_model, cluster_alg = "hc", distance = "pearson"){
