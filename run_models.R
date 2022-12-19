@@ -8,10 +8,10 @@ for(s in sources){
 
 ##### Loading data #####
 
-  # BDR_all = read.csv("raw_data/BDR_FULL_PHENOTYPING.csv", sep = ";")
-  # pheno = read.csv("./BDR_pheno.csv", sep = "\t")
+  BDR_all = read.csv("raw_data/BDR_FULL_PHENOTYPING.csv", sep = ";")
+  pheno = read.csv("./BDR_pheno.csv", sep = "\t")
   # load("./processed.Rdata")
-  load("./current_status.Rdata")
+  load("./Met_BDR_preproc.Rdata")
   
 ##### Sample filtering #####
 pheno_PFC = pheno[pheno$Basename %in% colnames(mSet_betas),]
@@ -19,7 +19,8 @@ pheno_PFC = pheno[pheno$Basename %in% colnames(mSet_betas),]
 table(pheno_PFC$BraakTangle_numeric)
 remove(pheno)
 gc()
-
+pheno_PFC = pheno_PFC[order(pheno_PFC$Basename),]
+mSet_betas = mSet_betas[,order(colnames(mSet_betas))]
 ##### Batch effect removal #####
 
 mSet_betas = ComBat(dat=mSet_betas, batch=pheno_PFC$Institute, mod=NULL, par.prior=TRUE, prior.plots=FALSE)
@@ -49,6 +50,8 @@ mSet_betas<- {
 
 colnames(mSet_betas) = colbetas
 ##### MAD/Quantile filtering #####
+
+mSet_betas = mSet_betas[!is.na(rownames(mSet_betas)),]
 
 df_values = data.frame(matrix(ncol = 2, nrow = nrow(mSet_betas)))
 ### Use 80-90% quantile absolute deviation ?
@@ -227,94 +230,105 @@ gc()
   table(BDR_ok_ADCtrl[BDR_ok_ADCtrl$diag == "AD" & BDR_ok_ADCtrl$CDR < 1,]$MMSE)
 
   
+##### Curating Controls #####
+  BDR_ok_ADCtrl = BDR_ok_ADCtrl[order(BDR_ok_ADCtrl$BBNId),]
+  BDR_ok_ADCtrl$BBNId
+  BDR_filter = BDR_filter[order(BDR_filter$BBNId),]
+  BDR_filter$BBNId
+  BDR_ok_ADCtrl$Thal_phase = BDR_filter$Thal.stage
+  
+  BDR_ok_ADCtrl$Thal_number = NA
+  BDR_ok_ADCtrl$Thal_number[BDR_ok_ADCtrl$Thal_phase == "Thal phase 0 "] = 0
+  BDR_ok_ADCtrl$Thal_number[BDR_ok_ADCtrl$Thal_phase == "Thal phase 1 "] = 1
+  BDR_ok_ADCtrl$Thal_number[BDR_ok_ADCtrl$Thal_phase == "Thal phase 2 "] = 2
+  BDR_ok_ADCtrl$Thal_number[BDR_ok_ADCtrl$Thal_phase == "Thal phase 3 "] = 3
+  BDR_ok_ADCtrl$Thal_number[BDR_ok_ADCtrl$Thal_phase == "Thal phase 4 "] = 4
+  BDR_ok_ADCtrl$Thal_number[BDR_ok_ADCtrl$Thal_phase == "Thal phase 5 "] = 5
+  BDR_ok_ADCtrl$Thal_number[BDR_ok_ADCtrl$Thal_phase == "Thal phase not assessed "] = NA
+  BDR_ok_ADCtrl$Thal_number[BDR_ok_ADCtrl$Thal_phase == ""] = NA
+  table(BDR_ok_ADCtrl$Thal_phase)
+  table(BDR_ok_ADCtrl$Thal_number)
+  
+  BDR_Ctrl = BDR_ok_ADCtrl[BDR_ok_ADCtrl$diag == "Control",]
+  BDR_Ctrl$new_diag = NA
+  BDR_Ctrl$Thal_phase
+  
+  
+  #Braak stage 0-2
+  table(BDR_Ctrl$BraakTangle_numeric)
+  BDR_Ctrl_BTnonOK = BDR_Ctrl[which(BDR_Ctrl$Braak_tangle >= 4),]
+  
+  # Argyrophilic
+  grep("+Ndgen.NonADTau.AGD", BDR_Ctrl$pathology, fixed = TRUE)
+  BDR_Ctrl_Argnonok = BDR_Ctrl[grep("+Ndgen.NonADTau.AGD", BDR_Ctrl$pathology, fixed = TRUE),]
+  BDR_Ctrl_Argnonok$pathology  
+
+  # Thal and Cerad 0
+  table(BDR_Ctrl$Cerad, BDR_Ctrl$Thal_number)
+  BDR_Ctrl_amynonok = BDR_Ctrl[which(BDR_Ctrl$Cerad > 0 | BDR_Ctrl$Thal_number > 0),]
+
+  # TDP43
+  grep("+Ndgen.TDP.TDPaccomp", BDR_Ctrl$pathology, fixed = TRUE)
+  BDR_Ctrl_TDP43 = BDR_Ctrl[grep("+Ndgen.TDP.TDPaccomp", BDR_Ctrl$pathology, fixed = TRUE),]
+  BDR_Ctrl_TDP43$pathology
+  
+  # Alpha synuclein - no info ??
+  grep("a-", BDR_Ctrl$pathology, fixed = TRUE)
+  BDR_Ctrl_alpha = BDR_Ctrl[grep("a-", BDR_Ctrl$pathology, fixed = TRUE),]
+  BDR_Ctrl_alpha$pathology
+  
+  # Cerebrovascular
+  
+  grep("vascular", BDR_Ctrl$clinical)
+  grep("vascular", BDR_Ctrl$clinical_plus)
+  grep("vascular", BDR_Ctrl$pathology)
+  
+  final_cereb = c(grep("vascular", BDR_Ctrl$clinical, fixed = TRUE),
+                  grep("vascular", BDR_Ctrl$clinical_plus, fixed = TRUE),
+                  grep("+CVD.Vasc.Athero.Sevathero", BDR_Ctrl$pathology, fixed = TRUE))
+  BDR_Ctrl_cereb = BDR_Ctrl[unique(final_cereb),]
+  BDR_Ctrl_cereb$clinical
+  BDR_Ctrl_cereb$clinical_plus
+  BDR_Ctrl_cereb$pathology
+  
+  # Leukemia - None ?
+  grep("LEUKEMIA", BDR_Ctrl$Cause_of_Death)
+  
+  # Neuropathologic correlate - None ?
+  grep("psychia", BDR_Ctrl$clinical_plus)
+  
+  
+  # Final assessment
+  final_ctrl_nonok = c(grep("vascular", BDR_Ctrl$clinical, fixed = TRUE),
+                       grep("vascular", BDR_Ctrl$clinical_plus, fixed = TRUE),
+                       grep("+CVD.Vasc.Athero.Sevathero", BDR_Ctrl$pathology, fixed = TRUE),
+                       grep("+Ndgen.TDP.TDPaccomp", BDR_Ctrl$pathology, fixed = TRUE),
+                       which(BDR_Ctrl$Cerad > 1 | BDR_Ctrl$Thal_number > 2),
+                       grep("+Ndgen.NonADTau.AGD", BDR_Ctrl$pathology, fixed = TRUE),
+                       which(BDR_Ctrl$Braak_tangle >= 3))
+  final_ctrl_nonok = order(unique(final_ctrl_nonok))
+  
+  
+  BDR_remove = BDR_Ctrl[-final_ctrl_nonok,]
+  BDR_remove$Basename
 ##### Train / Test models #####
-  
-  BDR_ok_ADCtrl = BDR_ok_ADCtrl[order(BDR_ok_ADCtrl$Basename),]
-  mSet_betas = mSet_betas[,order(colnames(mSet_betas))]
-  head(colnames(mSet_betas))
-  head(BDR_ok_ADCtrl$Basename)
-  table(BDR_ok_ADCtrl$diag)
-  
-  BDR_ok_ADCtrl$age_conc = NA ### Making age into simpler intervals
-  BDR_ok_ADCtrl[BDR_ok_ADCtrl$Age < summary(BDR_ok_ADCtrl$Age)[2],]$age_conc = 1
-  BDR_ok_ADCtrl[BDR_ok_ADCtrl$Age >= summary(BDR_ok_ADCtrl$Age)[2] & 
-                  BDR_ok_ADCtrl$Age < summary(BDR_ok_ADCtrl$Age)[3],]$age_conc = 2
-  BDR_ok_ADCtrl[BDR_ok_ADCtrl$Age >= summary(BDR_ok_ADCtrl$Age)[3] & 
-                  BDR_ok_ADCtrl$Age < summary(BDR_ok_ADCtrl$Age)[5],]$age_conc = 3
-  BDR_ok_ADCtrl[BDR_ok_ADCtrl$Age >= summary(BDR_ok_ADCtrl$Age)[5],]$age_conc = 4
-  
-  set.seed(3)  
   #### Normal sampling #### 
   # training_ID = splitstackshape::stratified(BDR_metadata_AD, c("age_conc","Gender"),size = 0.6)
   # training_ID = training_ID$Basename
   # test_ID = BDR_metadata_AD[!BDR_metadata_AD$Basename %in% training_ID,]$Basename
   #### Kstone sampling ####
-  sample_select = kenStone(X = t(mSet_betas),
-                           k = round(0.7*ncol(mSet_betas)),
-                           pc = 20,
-                           .center = TRUE,
-                           .scale = TRUE)
+  # sample_select = kenStone(X = t(mSet_betas),
+  #                          k = round(0.7*ncol(mSet_betas)),
+  #                          pc = 20,
+  #                          .center = TRUE,
+  #                          .scale = TRUE)
+  # 
+  # training = mSet_betas[,sample_select$model]
+  # testing = mSet_betas[,sample_select$test]
+  # BDR_metadata_train = BDR_ok_ADCtrl[sample_select$model,]
+  # BDR_metadata_test = BDR_ok_ADCtrl[sample_select$test,]
+  #### Split AD Ctrl ####
   
-  training = mSet_betas[,sample_select$model]
-  testing = mSet_betas[,sample_select$test]
-  BDR_metadata_train = BDR_ok_ADCtrl[sample_select$model,]
-  BDR_metadata_test = BDR_ok_ADCtrl[sample_select$test,]
-  ###
-  ## Check train/test split
-  
-  training = t(training)
-  testing = t(testing)
-  print(colnames(training))
-  print(ncol(training))
-  print(colnames(testing))
-  print(ncol(testing))
-  table(BDR_metadata_train$Braak_tangle)
-  table(BDR_metadata_test$Braak_tangle)
-  table(BDR_metadata_train$Gender)
-  table(BDR_metadata_test$Gender)
-  table(BDR_metadata_train$age_conc)
-  table(BDR_metadata_test$age_conc)
-  table(BDR_metadata_train$APOE)
-  table(BDR_metadata_test$APOE)
-  table(BDR_metadata_train$CDR)
-  table(BDR_metadata_test$CDR)
-  
-  dir.create("results/")
-  dir.create("results/ADvsCtrl_Methyl/")
-  dir.create("results/ADvsCtrl_Methyl/SPLSDA")
-  
-  ADCtrl_Methyl = mixOmics::splsda(training, BDR_metadata_train$diag, keepX=c(1000,1000,1000,1000,1000,1000), ncomp = 6)
-  plot_mixOmics_all(model = ADCtrl_Methyl, outdir = "results/ADvsCtrl_Methyl/SPLSDA/")
-  
-  ADCtrl_pred = predict(ADCtrl_Methyl, newdata = testing)
-  
-  ADCtrl_roc = auroc(ADCtrl_Methyl, newdata = testing, 
-                 outcome.test = BDR_metadata_test$diag, roc.comp = 1)
-  table(ADCtrl_pred$MajorityVote$max.dist[,2], BDR_metadata_test$diag)
-
-  fitControl <- trainControl(method = "repeatedcv", 
-                             number = 4, 
-                             repeats = 20, 
-                             classProb=TRUE,  
-                             savePredictions = TRUE, 
-                             summaryFunction = twoClassSummary)
-  
-  training = cbind(BDR_metadata_train$diag, training)
-  testing = cbind(BDR_metadata_test$diag, testing)
-  
-  colnames(training)[1] = "diag"
-  colnames(testing)[1] = "diag"
-  
-  ADCtrl_plsFit = train(diag ~ ., data = training,
-                 method = "pls",
-                 trControl = fitControl, 
-                 tuneLength = 20)
-  
-  
-    
-######## ######## ######## ######## ######## ######## ######## ######## ######## ######## ######## 
-##### Train / Test models #####
-
   BDR_ok_ADCtrl = BDR_ok_ADCtrl[order(BDR_ok_ADCtrl$Basename),]
   mSet_betas = mSet_betas[,order(colnames(mSet_betas))]
   head(colnames(mSet_betas))
@@ -335,60 +349,16 @@ gc()
   mSet_betas_Ctrl = mSet_betas[,colnames(mSet_betas) %in% BDR_metadata_Ctrl$Basename]
   
   set.seed(3)  
-  #### Normal sampling #### 
-  # training_ID = splitstackshape::stratified(BDR_metadata_AD, c("age_conc","Gender"),size = 0.6)
-  # training_ID = training_ID$Basename
-  # test_ID = BDR_metadata_AD[!BDR_metadata_AD$Basename %in% training_ID,]$Basename
-  #### Kstone sampling ####
-  sample_select = kenStone(X = t(mSet_betas_AD),
-                           k = round(0.7*ncol(mSet_betas_AD)),
-                           pc = 20,
-                           .center = TRUE,
-                           .scale = TRUE)
-  
-  training_AD = mSet_betas_AD[,sample_select$model]
-  testing_AD = mSet_betas_AD[,sample_select$test]
-  BDR_metadata_train_AD = BDR_metadata_AD[sample_select$model,]
-  BDR_metadata_test_AD = BDR_metadata_AD[sample_select$test,]
-  ###
-  sample_select = kenStone(X = t(mSet_betas_Ctrl),
-                           k = round(0.7*ncol(mSet_betas_Ctrl)),
-                           pc = 20,
-                           .center = TRUE,
-                           .scale = TRUE)
-  training_Ctrl = mSet_betas_Ctrl[,sample_select$model]
-  testing_Ctrl = mSet_betas_Ctrl[,sample_select$test]
-  BDR_metadata_train_Ctrl = BDR_metadata_Ctrl[sample_select$model,]
-  BDR_metadata_test_Ctrl = BDR_metadata_Ctrl[sample_select$test,]
   
   # gc()
   # affM_Methyl_all = aff_matrix_calc(mSet_betas)
   # affM_Methyl_noCor = aff_matrix_calc(mSet_betas_noCor)
-  
-## Check train/test split
-  print(colnames(training_AD))
-  print(ncol(training_AD))
-  print(colnames(testing_AD))
-  print(ncol(testing_AD))
-  table(BDR_metadata_train_AD$Braak_tangle)
-  table(BDR_metadata_test_AD$Braak_tangle)
-  table(BDR_metadata_train_AD$Gender)
-  table(BDR_metadata_test_AD$Gender)
-  table(BDR_metadata_train_AD$age_conc)
-  table(BDR_metadata_test_AD$age_conc)
-  table(BDR_metadata_train_AD$APOE)
-  table(BDR_metadata_test_AD$APOE)
-  table(BDR_metadata_train_AD$CDR)
-  table(BDR_metadata_test_AD$CDR)
-  
-  
-  
 ##### Building datasets #####
 
   list_datasets = list()
   cols_df = ""
   
-  list_datasets[[length(list_datasets)+1]] = training_AD
+  list_datasets[[length(list_datasets)+1]] = mSet_betas_AD
   names(list_datasets)[length(list_datasets)] = "Methyl"
   
   # list_aff_matrix[[length(list_aff_matrix)+1]] = affM_Methyl_all
@@ -416,28 +386,28 @@ gc()
   
   multi_Spectrum = Spectrum_modelization(list_datasets, spectrum_method = 3, 
                                          cluster_alg = "GMM", num_clusters = 4)
-  plot_model(multi_Spectrum, "Spectrum", colnames(training_AD), paste0("results/", dirname, "/Spectrum/"))
+  plot_model(multi_Spectrum, "Spectrum", colnames(mSet_betas_AD), paste0("results/", dirname, "/Spectrum/"))
   df_assignment = data.frame("Spectrum" = multi_Spectrum$assignments,
                              row.names = names(multi_Spectrum$assignments))  
 
   multi_HC = CC_modelization(list_datasets[[1]],
                              title_model = paste0("results/", dirname, "/HClust/"), 
                              cluster_alg = "hc", distance = "pearson")
-  plot_model(multi_HC, "CC", colnames(training_AD), paste0("results/", dirname, "/HClust/"),
+  plot_model(multi_HC, "CC", colnames(mSet_betas_AD), paste0("results/", dirname, "/HClust/"),
              numCC_clusters = 3)
   df_assignment$HC = multi_HC[[3]]$consensusClass
   
   multi_KM = CC_modelization(list_datasets[[1]],
                              title_model = paste0("results/", dirname, "/Kmeans/"), 
                              cluster_alg = "km", distance = "euclidean")
-  plot_model(multi_KM, "CC", colnames(training_AD), paste0("results/", dirname, "/Kmeans/"),
+  plot_model(multi_KM, "CC", colnames(mSet_betas_AD), paste0("results/", dirname, "/Kmeans/"),
              numCC_clusters = 4)
   df_assignment$KM = multi_KM[[4]]$consensusClass
   
   multi_PAM = CC_modelization(list_datasets[[1]],
                              title_model = paste0("results/", dirname, "/PAM/"), 
                              cluster_alg = "pam", distance = "pearson")
-  plot_model(multi_PAM, "CC", colnames(training_AD), paste0("results/", dirname, "/PAM/"),
+  plot_model(multi_PAM, "CC", colnames(mSet_betas_AD), paste0("results/", dirname, "/PAM/"),
              numCC_clusters = 4)
   df_assignment$PAM = multi_PAM[[4]]$consensusClass
   
@@ -448,24 +418,17 @@ gc()
   
 ##### mixOmics #####
   
-  BDR_metadata_train_AD$HC_clusters = multi_HC[[3]]$consensusClass
-  BDR_metadata_train_AD$KM_clusters = multi_KM[[4]]$consensusClass
-  BDR_metadata_train_AD$PAM_clusters = multi_PAM[[4]]$consensusClass
-  BDR_metadata_train_AD$Spec_clusters = multi_Spectrum$assignments
+  BDR_metadata_AD$HC_clusters = multi_HC[[3]]$consensusClass
+  BDR_metadata_AD$KM_clusters = multi_KM[[4]]$consensusClass
+  BDR_metadata_AD$PAM_clusters = multi_PAM[[4]]$consensusClass
+  BDR_metadata_AD$Spec_clusters = multi_Spectrum$assignments
   
-  BDR_metadata_train_Ctrl$HC_clusters = rep(99, nrow(BDR_metadata_train_Ctrl))
-  BDR_metadata_train_Ctrl$KM_clusters = rep(99, nrow(BDR_metadata_train_Ctrl))
-  BDR_metadata_train_Ctrl$PAM_clusters = rep(99, nrow(BDR_metadata_train_Ctrl))
-  BDR_metadata_train_Ctrl$Spec_clusters = rep(99, nrow(BDR_metadata_train_Ctrl))
-  
-  training = cbind(training_AD, training_Ctrl)
-  pheno_train = rbind(BDR_metadata_train_AD, BDR_metadata_train_Ctrl)
   
   diablo_Methyls = list()
-  diablo_Methyls[[1]] = mixOmics::splsda(t(training), pheno_train$HC_clusters, keepX=c(200,200,200,200,200,200), ncomp = 6)
-  diablo_Methyls[[2]] = mixOmics::splsda(t(training), pheno_train$KM_clusters, keepX=c(200,200,200,200), ncomp = 4)
-  diablo_Methyls[[3]] = mixOmics::splsda(t(training), pheno_train$PAM_clusters, keepX=c(200,200,200,200), ncomp = 4)
-  diablo_Methyls[[4]] = mixOmics::splsda(t(training), pheno_train$Spec_clusters, keepX=c(200,200,200,200), ncomp = 4)
+  diablo_Methyls[[1]] = mixOmics::splsda(t(mSet_betas_AD), BDR_metadata_AD$HC_clusters, keepX=c(200,200,200,200,200,200), ncomp = 6)
+  diablo_Methyls[[2]] = mixOmics::splsda(t(mSet_betas_AD), BDR_metadata_AD$KM_clusters, keepX=c(200,200,200,200), ncomp = 4)
+  diablo_Methyls[[3]] = mixOmics::splsda(t(mSet_betas_AD), BDR_metadata_AD$PAM_clusters, keepX=c(200,200,200,200), ncomp = 4)
+  diablo_Methyls[[4]] = mixOmics::splsda(t(mSet_betas_AD), BDR_metadata_AD$Spec_clusters, keepX=c(200,200,200,200), ncomp = 4)
   
   for(dMethyl in seq(1:length(diablo_Methyls))){
     if(dMethyl == 1){
@@ -522,16 +485,16 @@ gc()
                            "Spec_auc","Spec_ratio")
   
   for(i in seq(1:100)){
-    HC_shuffle = sample(pheno_train$HC_clusters)
-    KM_shuffle = sample(pheno_train$KM_clusters)
-    PAM_shuffle = sample(pheno_train$PAM_clusters)
-    Spec_shuffle = sample(pheno_train$Spec_clusters)
+    HC_shuffle = sample(BDR_metadata_AD$HC_clusters)
+    KM_shuffle = sample(BDR_metadata_AD$KM_clusters)
+    PAM_shuffle = sample(BDR_metadata_AD$PAM_clusters)
+    Spec_shuffle = sample(BDR_metadata_AD$Spec_clusters)
     
     diablo_shuffles = list()
-    diablo_shuffles[[1]] = mixOmics::splsda(t(training), HC_shuffle, keepX=c(200,200,200,200), ncomp = 4)
-    diablo_shuffles[[2]] = mixOmics::splsda(t(training), KM_shuffle, keepX=c(200,200,200,200), ncomp = 4)
-    diablo_shuffles[[3]] = mixOmics::splsda(t(training), PAM_shuffle, keepX=c(200,200,200,200), ncomp = 4)
-    diablo_shuffles[[4]] = mixOmics::splsda(t(training), Spec_shuffle, keepX=c(200,200,200,200), ncomp = 4)
+    diablo_shuffles[[1]] = mixOmics::splsda(t(mSet_betas_AD), HC_shuffle, keepX=c(200,200,200,200), ncomp = 4)
+    diablo_shuffles[[2]] = mixOmics::splsda(t(mSet_betas_AD), KM_shuffle, keepX=c(200,200,200,200), ncomp = 4)
+    diablo_shuffles[[3]] = mixOmics::splsda(t(mSet_betas_AD), PAM_shuffle, keepX=c(200,200,200,200), ncomp = 4)
+    diablo_shuffles[[4]] = mixOmics::splsda(t(mSet_betas_AD), Spec_shuffle, keepX=c(200,200,200,200), ncomp = 4)
     
     HC_roc = auroc(diablo_shuffles[[1]])
     KM_roc = auroc(diablo_shuffles[[2]])

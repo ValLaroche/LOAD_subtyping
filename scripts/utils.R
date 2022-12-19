@@ -24,6 +24,7 @@ library(snow)
 library("pbapply")
 library(aricode)
 library(prospectr)
+library(caret)
 
 iCB_sim_matrix = function (fit, label = NULL){
   cl = fit$clusters
