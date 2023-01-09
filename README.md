@@ -10,3 +10,10 @@ We used DNA methylation data generated in postmortem prefrontal cortex from thre
 ## Workflow
 
 ![Subtyping](./images/Subtyping_pipeline.png)
+
+## License and contributing guidelines
+[License](/LICENSE.md)
+[Contributing guidelines](/CONTRIBUTING.md)
+
+## Copyright and authors
+All code and documents in the RRtest folder was created by [these author(s)](/AUTHORS.md).
