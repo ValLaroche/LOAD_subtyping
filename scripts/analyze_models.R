@@ -182,44 +182,47 @@ calcNMI_clinical <- function(df_assignment, BDR_metadata){
   df_NMI_models = data.frame(matrix(ncol = 8))
   colnames(df_NMI_models) = c("Model","Clinical_var","nmi","AMI","Chi2","RI","ARI", "spearman")
   
-  df_BDR = data.frame("Gender" = BDR_metadata_train$Gender,
-                      "Age" = BDR_metadata_train$Age,
-                      "Age_conc" = BDR_metadata_train$age_conc,
-                      "Plate" = BDR_metadata_train$Plate,
-                      "Institute" = BDR_metadata_train$Institute,
-                      "Diag" = BDR_metadata_train$diag,
-                      "Dementia" = BDR_metadata_train$dementia,
-                      "CoD" = BDR_metadata_train$Cause_of_Death,
-                      "BraakTangle" = BDR_metadata_train$Braak_tangle,
-                      "BraakLB" = BDR_metadata_train$Braak_LB,
-                      "Cerad" = BDR_metadata_train$Cerad,
-                      "APOE" = BDR_metadata_train$APOE,
-                      "CDR" = BDR_metadata_train$CDR,
-                      "MMSE" = BDR_metadata_train$MMSE)
+  df_BDR = data.frame("Gender" = BDR_metadata$Gender,
+                      "Age" = BDR_metadata$Age,
+                      "Age_conc" = BDR_metadata$age_conc,
+                      "Plate" = BDR_metadata$Plate,
+                      "Institute" = BDR_metadata$Institute,
+                      "Diag" = BDR_metadata$diag,
+                      "Dementia" = BDR_metadata$dementia,
+                      "CoD" = BDR_metadata$Cause_of_Death,
+                      "BraakTangle" = BDR_metadata$Braak_tangle,
+                      "BraakLB" = BDR_metadata$Braak_LB,
+                      "Cerad" = BDR_metadata$Cerad,
+                      "APOE" = BDR_metadata$APOE,
+                      "CDR" = BDR_metadata$CDR,
+                      "MMSE" = BDR_metadata$MMSE)
   
-  if(ncol(df_assignment_train >= 2)){
+  if(ncol(df_assignment >= 2)){
     row_index = 1
-    for(i in c(1:ncol(df_assignment_train))){
+    for(i in c(1:ncol(df_assignment))){
       for(j in c(1:ncol(df_BDR))){  
         if(colnames(df_BDR)[j] %in% c("Age", "MMSE")){
-          df_NMI_models[row_index,1] = colnames(df_assignment_train)[i]
+          df_NMI_models[row_index,1] = colnames(df_assignment)[i]
           df_NMI_models[row_index,2] = colnames(df_BDR)[j]
-          df_NMI_models[row_index,8] = cor(df_assignment_train[!is.na(df_BDR[,j]),i], df_BDR[!is.na(df_BDR[,j]),j], method = "spearman")
+          df_NMI_models[row_index,8] = cor(df_assignment[!is.na(df_BDR[,j]),i], df_BDR[!is.na(df_BDR[,j]),j], method = "spearman")
           row_index = row_index + 1
         } else {
-          df_NMI_models[row_index,1] = colnames(df_assignment_train)[i]
+          df_NMI_models[row_index,1] = colnames(df_assignment)[i]
           df_NMI_models[row_index,2] = colnames(df_BDR)[j]
-          df_NMI_models[row_index,3] = NMI(df_assignment_train[!is.na(df_BDR[,j]),i], df_BDR[!is.na(df_BDR[,j]),j])
-          df_NMI_models[row_index,4] = AMI(df_assignment_train[!is.na(df_BDR[,j]),i], df_BDR[!is.na(df_BDR[,j]),j])
-          df_NMI_models[row_index,5] = Chi2(df_assignment_train[!is.na(df_BDR[,j]),i], df_BDR[!is.na(df_BDR[,j]),j])
-          df_NMI_models[row_index,6] = RI(df_assignment_train[!is.na(df_BDR[,j]),i], df_BDR[!is.na(df_BDR[,j]),j])
-          df_NMI_models[row_index,7] = ARI(df_assignment_train[!is.na(df_BDR[,j]),i], df_BDR[!is.na(df_BDR[,j]),j])
+          df_NMI_models[row_index,3] = NMI(df_assignment[!is.na(df_BDR[,j]),i], df_BDR[!is.na(df_BDR[,j]),j])
+          df_NMI_models[row_index,4] = AMI(df_assignment[!is.na(df_BDR[,j]),i], df_BDR[!is.na(df_BDR[,j]),j])
+          df_NMI_models[row_index,5] = Chi2(df_assignment[!is.na(df_BDR[,j]),i], df_BDR[!is.na(df_BDR[,j]),j])
+          df_NMI_models[row_index,6] = RI(df_assignment[!is.na(df_BDR[,j]),i], df_BDR[!is.na(df_BDR[,j]),j])
+          df_NMI_models[row_index,7] = ARI(df_assignment[!is.na(df_BDR[,j]),i], df_BDR[!is.na(df_BDR[,j]),j])
           row_index = row_index + 1
         }
       }
     }
   }
   
+  is.num <- sapply(df_NMI_models, is.numeric)
+  df_NMI_models[is.num] <- lapply(df_NMI_models[is.num], round, 4)
+  df_NMI_clinical[is.na(df_NMI_clinical)] = ""
   return(df_NMI_models)
 }
 

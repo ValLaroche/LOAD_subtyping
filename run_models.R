@@ -537,13 +537,76 @@ gc()
     df_shuffle[i,] = shuffle_res
   }
   
-    
+  
+  colnames(df_shuffle) = c("HC_accuracy","HC_intersect",
+                           "KM_accuracy","KM_intersect",
+                           "PAM_accuracy","PAM_intersect",
+                           "Spec_accuracy","Spec_intersect")
+  
+  ggplot(data = df_shuffle, aes(x = HC_accuracy, y = HC_intersect)) +
+    geom_point() +
+    xlim(0,1) + ylim(0,1) +
+    theme_minimal()
+  ggsave("./results/Methyl/HClust/HC_acc.jpeg")
+  ggplot(data = df_shuffle, aes(x = KM_accuracy, y = KM_intersect)) +
+    geom_point() +
+    xlim(0,1) + ylim(0,1) +
+    theme_minimal()
+  ggsave("./results/Methyl/Kmeans/KM_acc.jpeg")
+  ggplot(data = df_shuffle, aes(x = PAM_accuracy, y = PAM_intersect)) +
+    geom_point() +
+    xlim(0,1) + ylim(0,1) +
+    theme_minimal()
+  ggsave("./results/Methyl/PAM//PAM_acc.jpeg")
+  ggplot(data = df_shuffle, aes(x = Spec_accuracy, y = Spec_intersect)) +
+    geom_point() +
+    xlim(0,1) + ylim(0,1) +
+    theme_minimal()
+  ggsave("./results/Methyl/Spectrum/Spec_acc.jpeg")
+  
+  
   plot(df_shuffle[,1], df_shuffle[,2])
   plot(df_shuffle[,3], df_shuffle[,4])
   plot(df_shuffle[,5], df_shuffle[,6])
   plot(df_shuffle[,7], df_shuffle[,8])
   
-##### Optimise parameters #####
+##### Cross-method clustering #####
+
+  table(BDR_metadata_AD$HC_clusters, BDR_metadata_AD$KM_clusters)
+  table(BDR_metadata_AD$HC_clusters, BDR_metadata_AD$PAM_clusters)
+  table(BDR_metadata_AD$HC_clusters, BDR_metadata_AD$Spec_clusters)
+  table(BDR_metadata_AD$KM_clusters, BDR_metadata_AD$PAM_clusters)
+  table(BDR_metadata_AD$KM_clusters, BDR_metadata_AD$Spec_clusters)
+  table(BDR_metadata_AD$PAM_clusters, BDR_metadata_AD$Spec_clusters)
+  
+  BDR_metadata_AD$all_clust = NA
+  n_profile = 0
+  for(i in seq(1:nrow(BDR_metadata_AD))){
+    tmp_profile = paste(c(BDR_metadata_AD[i,]$HC_clusters,
+                        BDR_metadata_AD[i,]$KM_clusters,
+                        BDR_metadata_AD[i,]$PAM_clusters,
+                        BDR_metadata_AD[i,]$Spec_clusters),
+                        collapse = "-")
+    BDR_metadata_AD[i,]$all_clust = tmp_profile
+  }
+  
+  table(BDR_metadata_AD$all_clust)[order(table(BDR_metadata_AD$all_clust))]
+
+  table(BDR_metadata_AD$all_clust) %>% 
+    as.data.frame() %>% 
+    arrange(Var1)
+  
+    
+##### Clinical NMI #####
+  
+  
+  df_assignment_train = df_assignment[rownames(df_assignment) %in% BDR_metadata_AD$Basename,]
+  
+  df_NMI_clinical = calcNMI_clinical(df_assignment = df_assignment_train, BDR_metadata = BDR_metadata_AD)
+  df_NMI_clinical[is.na(df_NMI_clinical)] = ""
+  write.table(df_NMI_clinical, file = "./results/Methyl/clinical_NMI.csv", 
+              sep = "\t", quote = F, row.names = F, col.names = T)
+  ##### Optimise parameters #####
   
   # perf_splsda <- perf(diablo_Methyls[[1]], validation = "Mfold", 
   #                           folds = 5, nrepeat = 10, # use repeated cross-validation
@@ -563,7 +626,7 @@ gc()
   # tuned_splsda$choice.ncomp$ncomp # what is the optimal value of components according to tune.splsda()
   # tuned_splsda$choice.keepX # what are the optimal values of variables according to tune.splsda()
   
-##### Prediction onto testing #####
+  ##### Prediction onto testing #####
   
   testing = cbind(testing_AD, testing_Ctrl)
   pheno_test = rbind(BDR_metadata_test_AD, BDR_metadata_test_Ctrl)
@@ -577,7 +640,7 @@ gc()
                  outcome.test = HC_pred$MajorityVote$mahalanobis.dist[,6])
   table(HC_pred$MajorityVote$mahalanobis.dist[,6], pheno_test$diag)
   
-##### Sanity check #####
+  ##### Sanity check #####
   
   diablo_Tests = list()
   diablo_Tests[[1]] = mixOmics::splsda(t(testing), HC_pred, keepX=c(200,200,200,200), ncomp = 4)
@@ -604,13 +667,6 @@ gc()
   }
   
   
-##### Clinical NMI #####  
-  
-  
-  df_assignment_train = df_assignment[rownames(df_assignment) %in% BDR_metadata_train$Basename,]
-  
-  df_NMI_clinical = calcNMI_clinical(df_assignment = df_assignment_train, BDR_metadata = BDR_metadata_train)
-  clinical_compare(df_assignment_train, BDR_metadata_train, df_NMI_clinical, paste0("results/", dirname, "/"))
   
 ##### Projecting to ROSMAP #####
   
