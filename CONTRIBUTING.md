@@ -5,7 +5,6 @@ This document answers the following questions:
 - How to suggest updates or new features.
 - How to interact with the project using GitHub's functions (e.g., the pull request protocol).
 - How to file a bug report or create an issue.
-- The ultimate goal, vision, or roadmap for the project.
 - How to contact those in charge of the project.
 - Links to any external documentation or websites.
 
@@ -23,9 +22,6 @@ Project management is maintained by me (ValLaroche), please inform me via the is
 When creating an issue:
 - Please use short terms in title (such as "BUG:"; "IMPROVEMENT:"; "REQUEST:") followed by a concise description.
 - Please describe the issue clearly
-
-#### The ultimate goal, vision, or roadmap for the project
-The ultimate goal for this project is to create a standalone repository which contains all information to start, use and perform the task for a new user.
 
 #### How to contact those in charge of the project
 To contact me, please send an email to v.laroche@maasctrichtuniversity.nl.
