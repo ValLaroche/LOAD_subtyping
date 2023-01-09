@@ -18,4 +18,4 @@ We used DNA methylation data generated in postmortem prefrontal cortex from thre
 [Contributing guidelines](/CONTRIBUTING.md)
 
 ## Copyright and authors
-All code and documents in the RRtest folder was created by [these author(s)](/AUTHORS.md).
+All code and documents in the scripts folder was created by [these author(s)](/AUTHORS.md).
