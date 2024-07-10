@@ -24,10 +24,6 @@ SNF_modelization <- function(datasets_sim_matrix, K = 20, t = 20, num_clusters =
   snf_model_matrix = SNF(datasets_sim_matrix, K, t)
   
   snf_model_clusters = spectralClustering(snf_model_matrix, num_clusters)
-   # integrate_similarity_matrices(list(W1,W2,W3), KNNs_p = 10,diffusion_iters = 4, method = "TPG")
-  
-  snf_model_clusters = as.numeric(snf_model_clusters)
-  
   names(snf_model_clusters) = colnames(snf_model_matrix)
   
   snf_model = list(snf_model_matrix, snf_model_clusters)
@@ -54,56 +50,102 @@ ANF_modelization <- function(list_aff_matrix, K = 20, num_clusters = 2){
   return(list_ANF_model)
 }
 
-CC_modelization <- function(datasets, title_model, cluster_alg = "hc", distance = "pearson"){
+CC_modelization <- function(datasets, title_model, cluster_alg = "hc", distance = "euclidean"){
   CC_model = ConsensusClusterPlus(datasets, maxK = 6, reps = 50, pItem = 0.8, pFeature = 1,
                                   clusterAlg = cluster_alg, distance = distance, 
-                                  seed = 126, plot = "png", title = title_model)
+                                  innerLinkage="ward.D2", finalLinkage="ward.D2",
+                                  seed = 126, plot = "pdf", title = title_model)
   return(CC_model)
 }
 
-JIVE_modelization <- function(datasets){
+diablo_model <- function(data_matrix, metadata, dirname){
   
-  jive_model = jive(datasets)
+  metadata = metadata[metadata$HC_clusters != "Control",]
   
-  return(jive_model)
+  diablo_Methyls = list()
+  diablo_Methyls[[1]] = mixOmics::splsda(t(data_matrix), metadata$HC_clusters, keepX=c(2000,2000,2000,2000,2000,2000), ncomp = 6)
+  diablo_Methyls[[2]] = mixOmics::splsda(t(data_matrix), metadata$KM_clusters, keepX=c(2000,2000,2000,2000,2000,2000), ncomp = 6)
+  diablo_Methyls[[3]] = mixOmics::splsda(t(data_matrix), metadata$PAM_clusters, keepX=c(2000,2000,2000,2000,2000,2000), ncomp = 6)
+  diablo_Methyls[[4]] = mixOmics::splsda(t(data_matrix), metadata$Spec_clusters, keepX=c(2000,2000,2000,2000,2000,2000), ncomp = 6)
+  # 
+  # for(dMethyl in seq(1:length(diablo_Methyls))){
+  #   if(dMethyl == 1){
+  #     outdir = paste0("results/", dirname, "/HClust/")
+  #   } else if (dMethyl == 2){
+  #     outdir = paste0("results/", dirname, "/Kmeans/")
+  #   } else if (dMethyl == 3){
+  #     outdir = paste0("results/", dirname, "/PAM/")
+  #   } else if (dMethyl == 4){
+  #     outdir = paste0("results/", dirname, "/Spectrum/")
+  #   }
+  #   
+  #   plot_mixOmics_all(model = diablo_Methyls[[dMethyl]], outdir = outdir)
+  # }
+  
+  return(diablo_Methyls)
   
 }
 
-DIABLO_modelization <- function(datasets, Y_classes, keep_vals){
-  
-  for (i in seq(1:length(datasets))){
-      datasets[[i]] = t(as.matrix(datasets[[i]]))
-  }
-  
-  multi_DIABLO = block.splsda(X = datasets,
-                              Y = Y_classes,
-                              keepX = keep_vals)
-}
 
-ICB_modelization <- function(datasets, data_distrib, K){
+cv_final_model <- function(data_matrix_AD, metadata_AD, top_features, dirname){
   
-  list_datasets = list(NULL, NULL, NULL, NULL, NULL)
+  dir.create(paste0("results/", dirname))
+  dir.create(paste0("results/", dirname, "/Spectrum"))
+  dir.create(paste0("results/", dirname, "/HClust"))
+  dir.create(paste0("results/", dirname, "/Kmeans"))
+  dir.create(paste0("results/", dirname, "/PAM"))
   
-  for (i in seq(1:length(datasets))){
-    if(!is.null(datasets[[i]])){
-      list_datasets[[i]] = t(as.matrix(datasets[[i]]))
+  
+  HC_features_all = top_features[[1]]
+  KM_features_all = top_features[[2]]
+  PAM_features_all = top_features[[3]]
+  Spec_features_all = top_features[[4]]
+  
+  # Extract intersect of all CV models (Top specific features)
+  HC_final_features = Reduce(intersect, list(HC_features_all[,1], HC_features_all[,2], HC_features_all[,3], HC_features_all[,4],
+                                             HC_features_all[,5], HC_features_all[,6], HC_features_all[,7], HC_features_all[,8], 
+                                             HC_features_all[,9], HC_features_all[,10]))
+  KM_final_features = Reduce(intersect, list(KM_features_all[,1], KM_features_all[,2], KM_features_all[,3], KM_features_all[,4],
+                                             KM_features_all[,5], KM_features_all[,6], KM_features_all[,7], KM_features_all[,8], 
+                                             KM_features_all[,9], KM_features_all[,10]))
+  PAM_final_features = Reduce(intersect, list(PAM_features_all[,1], PAM_features_all[,2], PAM_features_all[,3], PAM_features_all[,4], 
+                                              PAM_features_all[,5], PAM_features_all[,6], PAM_features_all[,7], PAM_features_all[,8], 
+                                              PAM_features_all[,9], PAM_features_all[,10]))
+  Spec_final_features = Reduce(intersect, list(Spec_features_all[,1], Spec_features_all[,2], Spec_features_all[,3], Spec_features_all[,4], 
+                                               Spec_features_all[,5], Spec_features_all[,6], Spec_features_all[,7], Spec_features_all[,8], 
+                                               Spec_features_all[,9], Spec_features_all[,10]))
+  
+  # Build new betas matrices for each algorithm
+  HC_betas = data_matrix_AD[rownames(data_matrix_AD) %in% HC_final_features,]
+  KM_betas = data_matrix_AD[rownames(data_matrix_AD) %in% KM_final_features,]
+  PAM_betas = data_matrix_AD[rownames(data_matrix_AD) %in% PAM_final_features,]
+  Spec_betas = data_matrix_AD[rownames(data_matrix_AD) %in% Spec_final_features,]
+  # 200 features per comp for consistency or lower in case less features are selected
+  HC_comp = min(200, length(HC_final_features))
+  KM_comp = min(200, length(KM_final_features))
+  PAM_comp = min(200, length(PAM_final_features))
+  Spec_comp = min(200, length(Spec_final_features))
+  
+  #Build final crossvalidated models
+  diablo_final = list()
+  diablo_final[[1]] = mixOmics::splsda(t(HC_betas), metadata_AD$HC_clusters, keepX=c(HC_comp,HC_comp,HC_comp,HC_comp,HC_comp,HC_comp), ncomp = 6)
+  diablo_final[[2]] = mixOmics::splsda(t(KM_betas), metadata_AD$KM_clusters, keepX=c(KM_comp,KM_comp,KM_comp,KM_comp,KM_comp,KM_comp), ncomp = 6)
+  diablo_final[[3]] = mixOmics::splsda(t(PAM_betas), metadata_AD$PAM_clusters, keepX=c(PAM_comp,PAM_comp,PAM_comp,PAM_comp,PAM_comp,PAM_comp), ncomp = 6)
+  diablo_final[[4]] = mixOmics::splsda(t(Spec_betas), metadata_AD$Spec_clusters, keepX=c(Spec_comp,Spec_comp,Spec_comp,Spec_comp,Spec_comp,Spec_comp), ncomp = 6)
+  #Generate figures
+  for(dMethyl in seq(1:length(diablo_final))){
+    if(dMethyl == 1){
+      outdir = paste0("results/",dirname,"/HClust/")
+    } else if (dMethyl == 2){
+      outdir = paste0("results/",dirname,"/Kmeans/")
+    } else if (dMethyl == 3){
+      outdir = paste0("results/",dirname,"/PAM/")
+    } else if (dMethyl == 4){
+      outdir = paste0("results/",dirname,"/Spectrum/")
     }
+    
+    plot_mixOmics_all(model = diablo_final[[dMethyl]], outdir = outdir)
   }
   
-  multi_iCB = iClusterBayes(dt1 = list_datasets[[1]],
-                            dt2 = list_datasets[[2]],
-                            dt3 = list_datasets[[3]],
-                            dt4 = list_datasets[[4]],
-                            dt5 = list_datasets[[5]],
-                            type = data_distrib,
-                            K = K)
-  return(multi_iCB)
-}
-
-SNF.CC_modelization <- function(datasets, num_clusters){
-  multi_SNF.CC = ExecuteSNF.CC(datasets=datasets, clusterNum=num_clusters,
-                               K=20, alpha=0.5, t=20,maxK = 10, pItem = 0.8,reps=500, 
-                               title = "GBM", plot = "png", finalLinkage ="average")    
-
-  return(multi_SNF.CC)
+  return(list(diablo_final, HC_final_features, KM_final_features, PAM_final_features, Spec_final_features))
 }
