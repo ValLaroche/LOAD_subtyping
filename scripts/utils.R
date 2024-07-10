@@ -1,3 +1,4 @@
+# Load all relevant libraries to the project
 library(SNFtool)
 library(Spectrum)
 library(cluster)
@@ -58,6 +59,7 @@ library(cvms)
 library(pROC)
 library(VennDiagram)
 
+# Generate standard names for clustering pipeline
 make_dataset <- function(data_matrix, metadata, dirname, db, cpgs_intersect){
     if(db == "UKBBN"){
     metadata_AD = metadata[metadata$AD == 1,]
@@ -94,6 +96,7 @@ make_dataset <- function(data_matrix, metadata, dirname, db, cpgs_intersect){
   return(output)
 }
 
+# Make clustering models
 wrapper_models <- function(data_matrix_AD, metadata_AD, cluster_vector = c(), dirname){
   
   list_datasets = list(data_matrix_AD) #Input of models is a list (Because of multiomics)
@@ -127,6 +130,7 @@ wrapper_models <- function(data_matrix_AD, metadata_AD, cluster_vector = c(), di
   
 }
 
+# Generate heatmap of the clustering models results (unused)
 model_heatmap = function (model_matrix, model_clusters, label = NULL){
   sorted = sort(table(model_clusters))
   o.stol = as.numeric(names(sorted))
@@ -151,22 +155,7 @@ model_heatmap = function (model_matrix, model_clusters, label = NULL){
   return(plot_clusters)
 }
 
-resid = function(row, age, sex, prop){
-  fit = try(
-    lm( row ~ age + sex + prop),
-    silent=TRUE
-  )
-  if(inherits(fit,'try-error')) return(rep(NA, length(sex)))
-  fit$residuals
-
-  dat.reg = {
-    sex	= 	as.factor(pheno$Gender)
-    age	= 	pheno$Ageatdeath
-    prop =  as.numeric(pheno$prop)
-    t(apply(mydat, 1, resid, age, sex, prop))
-  }
-}
-
+# Add clustering results (HC/KM) labels to the complet pheno
 add_subtype_pheno <- function(pheno, df_assignment){
   pheno$HC_clusters = NA
   pheno$KM_clusters = NA
@@ -180,30 +169,7 @@ add_subtype_pheno <- function(pheno, df_assignment){
   return(pheno)
 }
 
-calc_sva <- function(tmpcounts, tmppheno, cohort){
-  
-  if(cohort == "UKBBN"){
-    tmppheno$Brain.Bank = factor(tmppheno$Brain.Bank, levels = unique(tmppheno$Brain.Bank))
-    mod1 = model.matrix(~Gender + Age + Brain.Bank + RINscale + plate, data=tmppheno)  
-  } else if (cohort == "PITT"){
-    mod1 = model.matrix(~Sex + Age + RINscale + Plate, data=tmppheno)  
-  } else if (cohort == "ROSMAP"){
-    mod1 = model.matrix(~msex + age_death + RINscale + Sample_Plate, data=tmppheno)  
-  }
-  mod0 = model.matrix(~1,data=tmppheno)
-  set.seed(1234)
-  
-  tmpcounts = na.omit(tmpcounts)
-  tmpcounts = as.matrix(tmpcounts)
-
-  svseq = sva::sva(tmpcounts,mod1,mod0, n.sv = 10)$sv
-  svseq = data.frame(svseq)
-  colnames(svseq) = paste0("sv",seq(1,ncol(svseq)))
-  tmppheno = cbind(tmppheno, svseq)
-  
-  return(tmppheno)
-}
-
+# Generate EWASs based on SVs as covariates and returning the results (per CPG)
 EWAS <- function(x, group,tmppheno){
   sv1 = tmppheno$sv1
   sv2 = tmppheno$sv2
@@ -221,6 +187,7 @@ EWAS <- function(x, group,tmppheno){
   return(c(coef(summary(fit))[2,],as.numeric(QuantPsyc::lm.beta(fit)[1]), coef(summary(fit))[2,2] /sd(group)))
 }
 
+# Generate EWASs for SNP results (unused)
 EWAS_SNP <- function(x, group,tmppheno){
   PC1 = tmppheno$PC1
   PC2 = tmppheno$PC2
@@ -239,7 +206,7 @@ EWAS_SNP <- function(x, group,tmppheno){
   return(c(coef(summary(fit))[2,],as.numeric(QuantPsyc::lm.beta(fit)[1]), coef(summary(fit))[2,2] /sd(group)))
 }
 
-
+# Calculate surrogate variables for the methylation level
 calc_sva_methyl <- function(tmpcounts, tmppheno, cohort){
   
   if(cohort == "UKBBN"){
@@ -270,6 +237,7 @@ calc_sva_methyl <- function(tmpcounts, tmppheno, cohort){
   return(tmppheno)
 }
 
+#Calculate surrogate variables for the FANS level
 calc_sva_FANS <- function(tmpcounts, tmppheno){
   
   tmppheno$Brain.Bank = factor(tmppheno$Brain.Bank, levels = unique(tmppheno$Brain.Bank))
@@ -288,7 +256,7 @@ calc_sva_FANS <- function(tmpcounts, tmppheno){
   return(tmppheno)
 }
 
-
+# Associate biomart gene IDs (unused)
 biomart_gene_assoc <- function(res_table, biomart_names, Pval_threshold, FC_threshold){
   
   res_table = res_table[-log10(res_table$PValue) > Pval_threshold & abs(res_table$logFC) > FC_threshold,]
@@ -308,12 +276,14 @@ biomart_gene_assoc <- function(res_table, biomart_names, Pval_threshold, FC_thre
   return(res_table)
 }
 
+# Plotting the convex hulls when establishing the subtypes
 plot_convex_hull<-function(xcoord, ycoord, lcolor){
   hpts <- chull(x = xcoord, y = ycoord)
   hpts <- c(hpts, hpts[1])
   lines(xcoord[hpts], ycoord[hpts], col = lcolor)
 }  
 
+# Calculating effect sizes for the methylation data
 cohenD <- function(cpg, pheno, groups, AD = FALSE){
   if(AD){
     pheno_1 = pheno[pheno$diag %in% groups[1],]
@@ -332,134 +302,11 @@ cohenD <- function(cpg, pheno, groups, AD = FALSE){
   s1 <- sd(cpg_group1)
   s2 <- sd(cpg_group2)
   
-  #find sample size of each sample
   n1 <- length(cpg_group1)
   n2 <- length(cpg_group2)
-  
-  # sd_cpg = sd(c(cpg_group1, cpg_group2))
   
   poolsd_cpg = sqrt(((n1-1)*s1^2 + (n2-1)*s2^2) / (n1+n1-2))
   
   cohend = (mean_group1 - mean_group2) / poolsd_cpg
   return(cohend)
-}
-
-make_RF <- function(training){
-  set.seed(4)
-  
-  fitControl <- trainControl(method = "repeatedcv", 
-                             number = 10, 
-                             repeats = 10, 
-                             classProb=TRUE,  
-                             savePredictions = TRUE, 
-                             summaryFunction = twoClassSummary)
-  
-  rf_OMICS = train(subtype ~ ., data = training,
-                   method = "rf",
-                   trControl = fitControl,
-                   verbose = FALSE,
-                   tuneLength = 20)
-  
-  return(rf_OMICS)
-}
-
-make_tableres <- function(model, training, testing){
-  tableres_test = data.frame("RID" = rownames(testing),
-                             "Target_test" = testing$subtype,
-                             "Predicted_test" = predict(model, newdata = testing))
-  tableres_train = data.frame("RID" = rownames(training),
-                              "Target_train" = training$subtype,
-                              "Predicted_train" = predict(model, newdata = training))
-  
-  
-  tableres_test = cbind(tableres_test, as.data.frame(predict(model, newdata = testing, type = "prob"))[,,1])
-  tableres_train = cbind(tableres_train, as.data.frame(predict(model, newdata = training, type = "prob"))[,,1])
-  
-  colnames(tableres_test)[4] = unique(testing$subtype)[1]
-  colnames(tableres_test)[5] = unique(testing$subtype)[2]
-  colnames(tableres_train)[4] = unique(training$subtype)[1]
-  colnames(tableres_train)[5] = unique(training$subtype)[2]
-  
-  return(list(tableres_test, tableres_train))
-}
-
-make_ROC <- function(tableres, roc_data, MCC_data, outpath){
-  pdf(file = outpath, width = 7, height = 7)
-  plot.roc(roc_data)
-  legend("topleft", legend = paste("MCC =", MCC_data[16]))
-  dev.off()
-}
-
-make_CM <- function(tableres, outpath){
-  conf_mat = confusion_matrix(targets = tableres$Target,
-                              predictions = tableres$Predicted)
-  
-  plot_cm = plot_confusion_matrix(
-    conf_mat$`Confusion Matrix`[[1]],
-    add_sums = TRUE,
-    sums_settings = sum_tile_settings(
-      palette = "Oranges",
-      label = "Total",
-      tc_tile_border_color = "black",
-    ),
-    font_row_percentages = font(size = 5),
-    font_col_percentages = font(size = 5),
-    font_counts = font(size = 7))
-  plot_cm = plot_cm + theme(axis.title = element_text(size = 18),
-                            axis.text = element_text(size = 14))   
-  
-  pdf(file = outpath, width = 7, height = 7)
-  plot(plot_cm)
-  dev.off()
-  
-}
-
-make_impt <- function(model, num_features, outpath, model_type = "nonplsda"){
-  if(model_type == "nonplsda"){
-    
-    top_features = min(50, num_features)
-    plot_impt = plot(varImp(model, scale = F), top = top_features)
-    
-    pdf(file = outpath, width = 7, height = 7)
-    plot(plot_impt)
-    dev.off()
-  } else {
-    var_imp = data.frame(feature = rownames(model$betahat),
-                         value = model$betahat[,1])
-    var_imp = var_imp[order(abs(var_imp$value), decreasing = T),]
-    var_imp$feature = factor(var_imp$feature, levels = var_imp$feature)
-    
-    top_features = min(50, num_features)
-    var_imp = var_imp[seq(1:top_features),]
-    
-    plot_impt = ggplot(var_imp, aes(x = rev(feature), y = value)) +
-      ggtitle("Overall variable importance of SPLSDA model") +
-      geom_bar(stat = "identity", width = 0.1) +
-      geom_point(colour = "#529EFF") +
-      theme_bw() +
-      theme(plot.title = element_text(hjust = 0.5),
-            axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-      xlab("Features") +
-      coord_flip()
-    
-    pdf(file = outpath, width = 7, height = 7)
-    plot(plot_impt)
-    dev.off()
-  }
-}
-
-make_opti <- function(df_AUC_MCC, outpath){
-  df_AUC_MCC_melt = melt(df_AUC_MCC, id.vars = c("model", "nfeatures", "train_test"), measure.vars = c("AUC", "MCC"))
-  df_AUC_MCC_melt$value = as.numeric(df_AUC_MCC_melt$value)
-  df_AUC_MCC_melt$nfeatures = as.numeric(df_AUC_MCC_melt$nfeatures)
-  AUCMCC_plot = ggplot(df_AUC_MCC_melt, aes(x = nfeatures, y = value, group = variable, color = variable)) +
-    geom_point() +
-    ylim(-1, 1) +
-    facet_wrap(~train_test, nrow = 2) +
-    theme_bw()
-  
-  
-  pdf(file = outpath, width = 8, height = 7)
-  plot(AUCMCC_plot)
-  dev.off()
 }
