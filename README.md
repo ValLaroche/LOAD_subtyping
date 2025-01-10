@@ -15,4 +15,4 @@ In the present study, we used genome-wide DNAm data from three independent postm
 [Contributing guidelines](/CONTRIBUTING.md)
 
 ## Copyright and authors
-All code and documents in the scripts folder were created by [these author(s)](/AUTHORS.md).
+All code and documents in the scripts folder were created by Valentin Laroche (ValLaroche / v.laroche@maastrichtuniversity.nl)
