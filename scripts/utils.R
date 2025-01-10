@@ -256,6 +256,31 @@ calc_sva_FANS <- function(tmpcounts, tmppheno){
   return(tmppheno)
 }
 
+#Calculate surrogate variables for the FANS level
+calc_sva <- function(tmpcounts, tmppheno, cohort){
+  
+  if(cohort == "UKBBN"){
+    tmppheno$Brain.Bank = factor(tmppheno$Brain.Bank, levels = unique(tmppheno$Brain.Bank))
+    mod1 = model.matrix(~Gender + Age + Brain.Bank + RIN + plate + well, data=tmppheno)  
+  } else if (cohort == "PITT"){
+    mod1 = model.matrix(~Sex + Age + pool + plate + RIN, data=tmppheno)  
+  } else if (cohort == "ROSMAP"){
+    mod1 = model.matrix(~msex + age_death + seqbatch + RIN, data=tmppheno)  
+  }
+  mod0 = model.matrix(~1,data=tmppheno)
+  set.seed(1234)
+  
+  tmpcounts = na.omit(tmpcounts)
+  tmpcounts = as.matrix(tmpcounts)
+  
+  svseq = sva::sva(tmpcounts,mod1,mod0, n.sv = 10)$sv
+  svseq = data.frame(svseq)
+  colnames(svseq) = paste0("sv",seq(1,ncol(svseq)))
+  tmppheno = cbind(tmppheno, svseq)
+  
+  return(tmppheno)
+}
+
 # Associate biomart gene IDs (unused)
 biomart_gene_assoc <- function(res_table, biomart_names, Pval_threshold, FC_threshold){
   

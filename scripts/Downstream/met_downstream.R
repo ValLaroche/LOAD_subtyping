@@ -1,6 +1,6 @@
 setwd("D:/valentin/main/")
 
-load("RNAseq/current.Rdata")
+# load("RNAseq/current.Rdata")
 
 sources = dir("./scripts/",full.names=TRUE)
 for(s in sources){
@@ -286,6 +286,7 @@ ggvenn(tovenn, columns = c("BluevCtrl", "RedvCtrl", "RedvBlue"))
 tovenn <- list("BLUE vs Control" = rownames(sig_methyl_450k_blueC),
                "RED vs Control" = rownames(sig_methyl_450k_redC),
                "AD vs Control" = rownames(sig_methyl_450k_ADC))
+ggvenn(tovenn, columns = c("BLUE vs Control", "RED vs Control", "AD vs Control")) 
 
 # Full venn diagram for significant CpGs
 venn <- Venn(tovenn)

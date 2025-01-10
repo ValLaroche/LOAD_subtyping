@@ -133,22 +133,40 @@ double_anovas <- function(pheno_1, eigen_1, pref_1, pheno_2, eigen_2, pref_2, cl
     tukey_table = rbind(tukey_table, tmptukey_table)
   }
   tukey_table$variable = rep(colnames(full_anova)[c(2:ncol(full_anova))], each = nrow(tmptukey_table))
-  
+  tukey_table = tukey_table[c(intersect(grep("EPIC1",tukey_table$group1),grep("450k1", tukey_table$group2)),
+                              intersect(grep("450k1",tukey_table$group1),grep("EPIC1", tukey_table$group2)),
+                              intersect(grep("EPIC2",tukey_table$group1),grep("450k2", tukey_table$group2)),
+                              intersect(grep("450k2",tukey_table$group1),grep("EPIC2", tukey_table$group2)),
+                              intersect(grep("EPIC3",tukey_table$group1),grep("450k3", tukey_table$group2)),
+                              intersect(grep("450k3",tukey_table$group1),grep("EPIC3", tukey_table$group2))),]
+  tukey_table$y.position = min(tukey_table$y.position)
   full_anovamelt = melt(full_anova, id.vars = "clusters")
-  full_anovamelt$clusters = factor(full_anovamelt$clusters, levels = c("UKBBN_EPIC1","UKBBN_450k1",
-                                                                       "UKBBN_EPIC2","UKBBN_450k2",
-                                                                       "UKBBN_EPIC3","UKBBN_450k3"))
-  pdf(file = filename, width = 18, height = 10)
+  
+  full_anovamelt_EPIC = full_anovamelt[grep("EPIC", full_anovamelt$clusters),]
+  full_anovamelt_450k = full_anovamelt[grep("450k", full_anovamelt$clusters),]
+  
+  stat_EPIC = full_anovamelt_EPIC %>% group_by(variable) %>% anova_test(value ~ clusters)
+  stat_EPIC$anovares = paste0("ANOVA EPIC, p-value :", stat_EPIC$p)
+  stat_450k = full_anovamelt_450k %>% group_by(variable) %>% anova_test(value ~ clusters)
+  stat_450k$anovares = paste0("ANOVA 450k, p-value :", stat_450k$p)
+  
+  full_anovamelt$clusters = factor(full_anovamelt$clusters, levels = c(paste0(pref_1, "1"),paste0(pref_2, "1"),
+                                                                       paste0(pref_1, "2"),paste0(pref_2, "2"),
+                                                                       paste0(pref_1, "3"),paste0(pref_2, "3")))
+  pdf(file = filename, width = 9.5, height = 15.27)
   print(ggplot(full_anovamelt, aes(x = clusters, y = value, color = clusters)) +
     geom_boxplot() +
     geom_jitter(size = .5) +
-    facet_wrap(~ variable, nrow = 3, scales = "free") +
-    stat_compare_means(size = 3,aes(label = paste0(after_stat(method), ", p-value = ", after_stat(p.format))),
-                       method = "anova", label.y = max(full_anovamelt$value*1, na.rm = TRUE)) +
-    stat_pvalue_manual(tukey_table, size = 3, label = "p.adj.signif", tip.length = 0.03, bracket.shorten = 0.02, alpha = 0.5) +
+    geom_text(aes(x = 3.6, y = 0.55, label = anovares), size = 2.7, data = stat_EPIC, inherit.aes = FALSE, position = position_dodge(.9)) +
+    geom_text(aes(x = 3.6, y = 0.6, label = anovares), size = 2.7, data = stat_450k, inherit.aes = FALSE, position = position_dodge(.9)) +
+    facet_wrap(~ variable, nrow = 4, scales = "free") +
+    stat_pvalue_manual(tukey_table, size = 4, label = "p.adj.signif", tip.length = 0.03, bracket.shorten = 0.02, alpha = 0.5) +
     theme_bw() +
+    ylim(-0.4, 0.65) +
+    xlab("WGCNA network modules") + ylab("Eigen values") + 
     theme(legend.position = "none", strip.background = element_blank(), strip.placement = "outside",
-          axis.text.x=element_text(size=7,angle = 45, vjust = 1, hjust=1)))
+          axis.text.x=element_text(size=7,angle = 45, vjust = 1, hjust=1),
+          strip.text = element_text(size = 11)))
   dev.off()
   
 }
@@ -354,12 +372,12 @@ pred_mapping_1pred <- function(data_disc, pheno_disc, data_pred, pheno_pred, coh
                         title = paste0(disc_cohort, " mapping in the ", cohort, " space"))
   
   
-  pdf(filename, width = 8, height = 8)
+  pdf(filename, width = 8.27, height = 7.5)
   plot_disc = plotIndiv(splsda_discovery, comp = 1:2, rep.space = "X-variate",
                         style="graphics",ind.names=FALSE, legend = FALSE,
                         title = paste0(disc_cohort, " mapping in the ", cohort, " space"),
                         xlim = c(min(plot_disc$df$x)-20,max(plot_disc$df$x)+20),
-                        ylim = c(min(plot_disc$df$y)-20,max(plot_disc$df$y)+20))
+                        ylim = c(min(plot_disc$df$y)-20,max(plot_disc$df$y)+20), pch = c(15, 16, 17))
   
   df_s1 = plot_disc$df[plot_disc$df$group == "1",]
   plot_convex_hull(df_s1$x, df_s1$y, lcolor = unique(df_s1$col))
@@ -371,12 +389,12 @@ pred_mapping_1pred <- function(data_disc, pheno_disc, data_pred, pheno_pred, coh
   plot_convex_hull(df_s3$x, df_s3$y, lcolor = unique(df_s3$col))
   
   points(pred$variates[, 1], pred$variates[, 2], 
-         pch = 19, cex = 1.2, col = pheno_pred[[clustering]])
+         pch = as.numeric(pheno_pred[[clustering]])+3, cex = 1, col = pheno_pred[[clustering]])
   par(xpd = TRUE)
   legend("topleft",legend = c(1,2,3),
-         pch = 19, cex = 1, col = c(1,2,3), title = disc_cohort, inset=c(0,0.2))
+         pch = c(4,5,6), cex = 1, col = c(1,2,3), title = "ROSMAP", inset=c(0,0.2))
   legend("topleft",legend = c(1,2,3),
-         pch = c(1,2,3), cex = 1, col = c("#388ECC","#F68B33","#C2C2C2"), title = cohort)
+         pch = c(15,16,17), cex = 1, col = c("#388ECC","#F68B33","#C2C2C2"), title = cohort)
   
   dev.off()
 }
@@ -404,92 +422,57 @@ test_chulls <- function(data_disc, pheno_disc, data_pred, pheno_pred, clustering
   yp_s1 = df_subtype[chull(df_subtype$x, df_subtype$y),]$y
   
   pred_s1 = pred$variates[rownames(pred$variates) %in% pheno_pred[pheno_pred[[clustering]] == 1,]$Basename,]
-  inpoly_s1 = table(inpolygon(x = pred_s1[,1], y = pred_s1[,2],
-                  xp = xp_s1, yp = yp_s1))["TRUE"]
-  if(is.na(inpoly_s1)){ inpoly_s1 = 0}
+  inpoly_s1 = rownames(pred_s1[inpolygon(x = pred_s1[,1], y = pred_s1[,2],
+                  xp = xp_s1, yp = yp_s1),])
   pred_s2 = pred$variates[rownames(pred$variates) %in% pheno_pred[pheno_pred[[clustering]] == 2,]$Basename,]
-  inpoly_s2 = table(inpolygon(x = pred_s2[,1], y = pred_s2[,2],
-                  xp = xp_s1, yp = yp_s1))["TRUE"]
-  if(is.na(inpoly_s2)){ inpoly_s2 = 0}
+  inpoly_s2 = rownames(pred_s2[inpolygon(x = pred_s2[,1], y = pred_s2[,2],
+                                         xp = xp_s1, yp = yp_s1),])
   pred_s3 = pred$variates[rownames(pred$variates) %in% pheno_pred[pheno_pred[[clustering]] == 3,]$Basename,]
-  inpoly_s3 = table(inpolygon(x = pred_s3[,1], y = pred_s3[,2],
-                  xp = xp_s1, yp = yp_s1))["TRUE"]
-  if(is.na(inpoly_s3)){ inpoly_s3 = 0}
-  sum_inpoly = sum(inpoly_s1, inpoly_s2, inpoly_s3)
+  inpoly_s3 = rownames(pred_s3[inpolygon(x = pred_s3[,1], y = pred_s3[,2],
+                                         xp = xp_s1, yp = yp_s1),])
+
+  sum_inpoly = c(inpoly_s1,inpoly_s2,inpoly_s3)
   
+  tmp_GO = GeneOverlap::newGeneOverlap(listA = sum_inpoly,
+                                       listB = pheno_pred[pheno_pred[[clustering]] == 1,]$Basename,
+                                       genome.size = nrow(pheno_pred))
+  fisher_s1 = testGeneOverlap(tmp_GO)
   
-  if(4 %in% unique(pheno_pred[[clustering]])){
-    pred_s4 = pred$variates[rownames(pred$variates) %in% pheno_pred[pheno_pred[[clustering]] == 4,]$Basename,]
-    inpoly_s4 = table(inpolygon(x = pred_s4[,1], y = pred_s4[,2],
-                                xp = xp_s1, yp = yp_s1))["TRUE"]
-    if(is.na(inpoly_s4)){ inpoly_s4 = 0}
-    sum_inpoly = sum(sum_inpoly, inpoly_s4)
-    
-  }
+  tmp_GO = GeneOverlap::newGeneOverlap(listA = sum_inpoly,
+                                       listB = pheno_pred[pheno_pred[[clustering]] == 2,]$Basename,
+                                       genome.size = nrow(pheno_pred))
+  fisher_s2 = testGeneOverlap(tmp_GO)
   
-  fisher_s1 = phyper(inpoly_s1, 
-                     nrow(pheno_pred[pheno_pred[[clustering]] == 1,]),
-                     nrow(pheno_pred) - nrow(pheno_pred[pheno_pred[[clustering]] == 1,]),
-                     sum_inpoly,
-                     lower.tail = FALSE, log.p = FALSE)
-  
-  fisher_s2 = phyper(inpoly_s2, 
-                     nrow(pheno_pred[pheno_pred[[clustering]] == 2,]),
-                     nrow(pheno_pred) - nrow(pheno_pred[pheno_pred[[clustering]] == 2,]),
-                     sum_inpoly,
-                     lower.tail = FALSE, log.p = FALSE)
-  
-  fisher_s3 = phyper(inpoly_s3, 
-                     nrow(pheno_pred[pheno_pred[[clustering]] == 3,]),
-                     nrow(pheno_pred) - nrow(pheno_pred[pheno_pred[[clustering]] == 3,]),
-                     sum_inpoly,
-                     lower.tail = FALSE, log.p = FALSE)
+  tmp_GO = GeneOverlap::newGeneOverlap(listA = sum_inpoly,
+                                       listB = pheno_pred[pheno_pred[[clustering]] == 3,]$Basename,
+                                       genome.size = nrow(pheno_pred))
+  fisher_s3 = testGeneOverlap(tmp_GO)
+
   
   res_s1 = c(nrow(pheno_pred),
              nrow(pheno_pred[pheno_pred[[clustering]] == 1,]),
-             sum_inpoly,
-             inpoly_s1,
-             fisher_s1)
+             length(sum_inpoly),
+             fisher_s1@pval,
+             fisher_s1@odds.ratio)
   res_s2 = c(nrow(pheno_pred),
              nrow(pheno_pred[pheno_pred[[clustering]] == 2,]),
-             sum_inpoly,
-             inpoly_s2,
-             fisher_s2)
+             length(sum_inpoly),
+             fisher_s2@pval,
+             fisher_s2@odds.ratio)
   res_s3 = c(nrow(pheno_pred),
              nrow(pheno_pred[pheno_pred[[clustering]] == 3,]),
-             sum_inpoly,
-             inpoly_s3,
-             fisher_s3)
+             length(sum_inpoly),
+             fisher_s3@pval,
+             fisher_s3@odds.ratio)
   
   df_res_fishers = data.frame(matrix(ncol = 5, nrow = 0))
   df_res_fishers = rbind(df_res_fishers, res_s1, res_s2, res_s3)
   
-  colnames(df_res_fishers) = c("Total_cohort","Total_in_subtype","Total_in_hull","Subtype_in_hull","P_value_Fisher")
+  colnames(df_res_fishers) = c("Total_cohort","Total_in_cluster","Total_in_hull","P_value_Fisher","Odds_ratio_Fisher")
   rownames(df_res_fishers) = c(paste0("Hull_S",subtype_hull,"_",disc,"_Subtype_1"),
                                paste0("Hull_S",subtype_hull,"_",disc,"_Subtype_2"),
                                paste0("Hull_S",subtype_hull,"_",disc,"_Subtype_3"))
 
-    
-  
-  if(4 %in% unique(pheno_pred[[clustering]])){
-    fisher_s4 = phyper(inpoly_s4, 
-                       nrow(pheno_pred[pheno_pred[[clustering]] == 4,]),
-                       nrow(pheno_pred) - nrow(pheno_pred[pheno_pred[[clustering]] == 4,]),
-                       sum_inpoly,
-                       lower.tail = FALSE, log.p = FALSE)
-    res_s4 = c(nrow(pheno_pred),
-               nrow(pheno_pred[pheno_pred[[clustering]] == 4,]),
-               sum_inpoly,
-               inpoly_s4,
-               fisher_s4)
-    df_res_fishers = rbind(df_res_fishers, res_s4)
-    rownames(df_res_fishers) = c(paste0("Hull_S",subtype_hull,"_",disc,"_Subtype_1"),
-                                 paste0("Hull_S",subtype_hull,"_",disc,"_Subtype_2"),
-                                 paste0("Hull_S",subtype_hull,"_",disc,"_Subtype_3"),
-                                 paste0("Hull_S",subtype_hull,"_",disc,"_Subtype_4"))
-  } 
-
-  
   return(df_res_fishers)
 }
 

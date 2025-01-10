@@ -3,16 +3,18 @@ WGCNAblock <- function(){
 ##### Loading #####
   
 setwd("D:/valentin/main/")
-sources = dir("./scripts/",full.names=TRUE)
-for(s in sources){
-  source(s)
-}
+source("./scripts/utils.R")
+source("./scripts/WGCNA/WGCNA_functions.R")
 #Load WGCNA model (per cohort)
-load("./WGCNA/UKBBN/UKBBN_subtyping.wgcna.network.rdat")
-load("WGCNA/UKBBN/UKBBN_subtyping.wgcna.softThreshold.rdat")
-load("WGCNA/UKBBN/UKBBN_subtyping.wgcna1.rdat")
-load("new_corr_allcohorts.Rdata")
+load("./WGCNA/PITT/PITT_subtyping.wgcna.network.rdat")
+load("WGCNA/PITT/PITT_subtyping.wgcna.softThreshold.rdat")
+load("WGCNA/PITT/PITT_subtyping.wgcna1.rdat")
 
+load("betas/ROSMAP_final_set_27-11-23.Rdata")
+load("betas/UKBBN_final_set_27-9-2023.Rdata")
+load("betas/PITT_final_set_15-11-23.Rdata")
+load("phenos_3cohorts.Rdata")
+load("D:/valentin/main/pheno_ROSMAP.Rdata")
 ##### Prepare data #####
   betas_UKBBN = betas_UKBBN[rownames(betas_UKBBN) %in% intersect(rownames(betas_UKBBN), rownames(betas_PITT)),]
   betas_PITT = betas_PITT[rownames(betas_PITT) %in% intersect(rownames(betas_UKBBN), rownames(betas_PITT)),]
@@ -40,6 +42,9 @@ load("new_corr_allcohorts.Rdata")
   WGCNA_labels = net$colors
   inter_450k_EPIC = rownames(data_matrix_AD_ROSMAP)
   
+  data_matrix_AD_UKBBN = data_matrix_AD_UKBBN[rownames(data_matrix_AD_UKBBN) %in% names(WGCNA_labels),]
+  data_matrix_AD_PITT = data_matrix_AD_PITT[rownames(data_matrix_AD_PITT) %in% names(WGCNA_labels),]
+
   #Generate the 450k sub-WGCNA model
   WGCNA_labels_450k = WGCNA_labels[names(WGCNA_labels) %in% inter_450k_EPIC]
   table(WGCNA_labels)
@@ -51,8 +56,8 @@ load("new_corr_allcohorts.Rdata")
                           NULL,
                           WGCNA_labels)
 
-  UKBBN_eigen_EPIC = output[[2]]
-  PITT_eigen_EPIC = output[[3]]
+  UKBBN_eigen_EPIC = output[[1]]
+  PITT_eigen_EPIC = output[[2]]
 
   #Calculate eigengenes values 450k
   matrix_450k_UKBBN = data_matrix_AD_UKBBN[rownames(data_matrix_AD_UKBBN) %in% inter_450k_EPIC,]
@@ -63,12 +68,12 @@ load("new_corr_allcohorts.Rdata")
                           t(data_matrix_AD_ROSMAP),
                           WGCNA_labels_450k)
 
-  UKBBN_eigen_450k = output[[2]]
-  PITT_eigen_450k = output[[3]]
-  ROSMAP_eigen_450k = output[[4]]
+  UKBBN_eigen_450k = output[[1]]
+  PITT_eigen_450k = output[[2]]
+  ROSMAP_eigen_450k = output[[3]]
 
   #Generate AD-only pheno files
-  cohort = "UKBBN"
+  cohort = "PITT"
   clustering = "HC_clusters"
   dir.create(paste0("./WGCNA/", cohort, "/", clustering))
   output = gen_phenos(pheno_1 = pheno_UKBBN,
@@ -89,8 +94,14 @@ load("new_corr_allcohorts.Rdata")
     main_expr_EPIC = data_matrix_AD_PITT
     main_expr_450k = matrix_450k_PITT
     
+    main_eEPIC = PITT_eigen_EPIC
+    main_e450k = PITT_eigen_450k
+    
     disc_expr_EPIC_1 = data_matrix_AD_UKBBN
     disc_expr_450k_1 = matrix_450k_UKBBN
+    
+    disc_eEPIC_1 = UKBBN_eigen_EPIC
+    disc_e450k_1 = UKBBN_eigen_450k
     
     disc_expr_450k_3 = data_matrix_AD_ROSMAP
     
@@ -106,8 +117,14 @@ load("new_corr_allcohorts.Rdata")
     main_expr_EPIC = data_matrix_AD_UKBBN
     main_expr_450k = matrix_450k_UKBBN
     
+    main_eEPIC = UKBBN_eigen_EPIC
+    main_e450k = UKBBN_eigen_450k
+    
     disc_expr_EPIC_1 = data_matrix_AD_PITT
     disc_expr_450k_1 = matrix_450k_PITT
+    
+    disc_eEPIC_1 = PITT_eigen_EPIC
+    disc_e450k_1 = PITT_eigen_450k
     
     disc_expr_450k_3 = data_matrix_AD_ROSMAP
     
@@ -133,7 +150,7 @@ load("new_corr_allcohorts.Rdata")
     pref_4 = "PITT"
   } 
  
-  s 
+   
 ##### WGCNA outputs #####
   # Correlation of WGCNA with clusters
   trait_UKBBN = gen_subtype_matrix(WGCNA_phenoUKBBN, clustering = clustering, nsubtypes = length(unique(WGCNA_phenoUKBBN[[clustering]])))
@@ -157,12 +174,12 @@ load("new_corr_allcohorts.Rdata")
                         eigengenes = ROSMAP_eigen_450k, filename = paste0("./WGCNA/", cohort, "/", clustering, "/anovatukeyR.pdf"))
   
   # Comparing either EPIC/450K or two cohorts to one another (ANOVA/Tukey)
-  double_anovas(pheno_1 = main_pheno, eigen_1 = main_eEPIC, pref_1 = "UKBBN_EPIC",
-                pheno_2 = main_pheno, eigen_2 = main_e450k, pref_2 = "UKBBN_450k",
-                clustering = clustering, filename = paste0("./WGCNA/", cohort, "/", clustering, "/anovas2cohort_UE45.pdf"))
-  double_anovas(pheno_1 = main_pheno, eigen_1 = main_eEPIC, pref_1 = pref_1,
-                pheno_2 = pheno_disc_3, eigen_2 = disc_e450k_3, pref_2 = pref_4,
-                clustering = clustering, paste0("./WGCNA/", cohort, "/", clustering, "/anovas2cohort_UR.pdf"))
+  double_anovas(pheno_1 = pheno_disc_1, eigen_1 = disc_eEPIC_1, pref_1 = "UKBBN_EPIC",
+                pheno_2 = pheno_disc_1, eigen_2 = disc_e450k_1, pref_2 = "UKBBN_450k",
+                clustering = clustering, filename = paste0("./WGCNA/", cohort, "/", clustering, "/anovas2cohort_UE45_UKBBN.pdf"))
+  double_anovas(pheno_1 = main_pheno, eigen_1 = main_eEPIC, pref_1 = "PITT_EPIC",
+                pheno_2 = main_pheno, eigen_2 = main_e450k, pref_2 = "PITT_450k",
+                clustering = clustering, filename = paste0("./WGCNA/", cohort, "/", clustering, "/anovas2cohort_UE45_PITT.pdf"))
   double_anovas(pheno_1 = main_pheno, eigen_1 = main_eEPIC, pref_1 = pref_1,
                 pheno_2 = pheno_disc_2, eigen_2 = disc_eEPIC_2, pref_2 = pref_3,
                 clustering = clustering, paste0("./WGCNA/", cohort, "/", clustering, "/anovas2cohort_UP.pdf"))
@@ -277,17 +294,10 @@ load("new_corr_allcohorts.Rdata")
   
   # Making a global matrix
   data_matrix_all = matrix(ncol = 0, nrow = 148951)  
-  data_matrix_all = cbind(data_matrix_all, matrix_450k_BDR[,colnames(matrix_450k_BDR) %in% table_redblue$Basename])
   data_matrix_all = cbind(data_matrix_all, matrix_450k_PITT[,colnames(matrix_450k_PITT) %in% table_redblue$Basename])
   data_matrix_all = cbind(data_matrix_all, matrix_450k_UKBBN[,colnames(matrix_450k_UKBBN) %in% table_redblue$Basename])
   data_matrix_all = cbind(data_matrix_all, data_matrix_AD_ROSMAP[,colnames(data_matrix_AD_ROSMAP) %in% table_redblue$Basename])
 
-  
-  WGCNA_phenoBDR$subtype = NA
-  WGCNA_phenoBDR[WGCNA_phenoBDR$Basename %in% red_methods_B$Basename,]$subtype = "red"
-  WGCNA_phenoBDR[WGCNA_phenoBDR$Basename %in% blue_methods_B$Basename,]$subtype = "blue"
-  WGCNA_phenoBDR[is.na(WGCNA_phenoBDR$subtype),]$subtype = "grey90"
-  
   WGCNA_phenoUKBBN$subtype = NA
   WGCNA_phenoUKBBN[WGCNA_phenoUKBBN$Basename %in% red_methods_U$Basename,]$subtype = "red"
   WGCNA_phenoUKBBN[WGCNA_phenoUKBBN$Basename %in% blue_methods_U$Basename,]$subtype = "blue"
@@ -303,7 +313,6 @@ load("new_corr_allcohorts.Rdata")
   WGCNA_phenoROSMAP[WGCNA_phenoROSMAP$Basename %in% blue_methods_R$Basename,]$subtype = "blue"
   WGCNA_phenoROSMAP[is.na(WGCNA_phenoROSMAP$subtype),]$subtype = "grey90"
   
-  table(WGCNA_phenoBDR$subtype)
   table(WGCNA_phenoUKBBN$subtype)
   table(WGCNA_phenoPITT$subtype)
   table(WGCNA_phenoROSMAP$subtype)
@@ -334,7 +343,7 @@ load("new_corr_allcohorts.Rdata")
   cor_median = median_samples(pheno_1 = main_pheno, data_1 = main_expr_450k, pref_1 = pref_1,
                               pheno_2 = pheno_disc_1, data_2 = disc_expr_450k_1, pref_2 = pref_2,
                               pheno_3 = pheno_disc_3, data_3 = disc_expr_450k_3, pref_3 = pref_4,
-                              clustering = "testKM")
+                              clustering = "HC_clusters")
   
   names_tosub = c("blue", "blue", "blue", "red",
                   "red", "red", "grey", "grey", "grey")
@@ -382,5 +391,37 @@ load("new_corr_allcohorts.Rdata")
   text(pred_median$variates[, 1], pred_median$variates[, 2], 
        pch = 1, cex = 1, col = colors_med, labels = rownames(cor_median))
   dev.off()
+
+#### Test PCA ####
+identical(rownames(matrix_450k_PITT), rownames(matrix_450k_UKBBN))
+identical(rownames(matrix_450k_PITT), rownames(main_expr_450k))
+  
+all_data_betas = cbind(disc_expr_450k_1, disc_expr_450k_3, main_expr_450k)
+pheno_ROSMAP_topca = data.frame(WGCNA_phenoROSMAP$Basename, WGCNA_phenoROSMAP$diag, WGCNA_phenoROSMAP$subtype, WGCNA_phenoROSMAP$HC_clusters, WGCNA_phenoROSMAP$KM_clusters)
+pheno_ROSMAP_topca$cohort = "ROSMAP"
+colnames(pheno_ROSMAP_topca) = c("Basename", "diag", "subtype", "HC_clusters", "KM_clusters", "cohort")
+pheno_UKBBN_topca = data.frame(WGCNA_phenoUKBBN$Basename, WGCNA_phenoUKBBN$diag, WGCNA_phenoUKBBN$subtype, WGCNA_phenoUKBBN$HC_clusters, WGCNA_phenoUKBBN$KM_clusters)
+pheno_UKBBN_topca$cohort = "UKBBN"
+colnames(pheno_UKBBN_topca) = c("Basename", "diag", "subtype", "HC_clusters", "KM_clusters", "cohort")
+pheno_PITT_topca = data.frame(WGCNA_phenoPITT$Basename, WGCNA_phenoPITT$diag, WGCNA_phenoPITT$subtype, WGCNA_phenoPITT$HC_clusters, WGCNA_phenoPITT$KM_clusters)
+pheno_PITT_topca$cohort = "PITT"
+colnames(pheno_PITT_topca) = c("Basename", "diag", "subtype", "HC_clusters", "KM_clusters", "cohort")
+
+pheno_all_topca = rbind(pheno_PITT_topca, pheno_ROSMAP_topca, pheno_UKBBN_topca)
+pheno_all_topca$subtypenum = pheno_all_topca$subtype
+pheno_all_topca[pheno_all_topca$subtypenum == "grey90",]$subtypenum = "3"
+pheno_all_topca[pheno_all_topca$subtypenum == "blue",]$subtypenum = "1"
+pheno_all_topca[pheno_all_topca$subtypenum == "red",]$subtypenum = "2"
+
+identical(pheno_all_topca$Basename, colnames(all_data_betas))
+set.seed(3)
+pca_all_data = prcomp(t(all_data_betas), scale. = TRUE)
+
+out_pca = data.frame(pca_all_data$x, subtype = pheno_all_topca$subtype)
+
+ggplot(out_pca, aes(x = PC1, y = PC2, col = subtype)) +
+  geom_point(size=2) +
+  scale_color_manual(values = c("steelblue2","grey90","brown2"))+ 
+  theme_classic()
 
 }

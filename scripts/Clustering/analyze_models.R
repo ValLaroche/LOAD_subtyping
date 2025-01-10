@@ -184,12 +184,8 @@ random_permutations <- function(data_matrix_AD, metadata_AD, diablo_Methyls){
   #Get original 1200 features stats
   HC_roc = auroc(diablo_Methyls[[1]], plot = FALSE, print = FALSE)
   KM_roc = auroc(diablo_Methyls[[2]], plot = FALSE, print = FALSE)
-  PAM_roc = auroc(diablo_Methyls[[3]], plot = FALSE, print = FALSE)
-  Spec_roc = auroc(diablo_Methyls[[4]], plot = FALSE, print = FALSE)
   final_aucs = c(mean(HC_roc$Comp6[,1]),
-                 mean(KM_roc$Comp6[,1]),
-                 mean(PAM_roc$Comp6[,1]),
-                 mean(Spec_roc$Comp6[,1]))
+                 mean(KM_roc$Comp6[,1]))
   
   #Get top features
   HC_var = plotVar(diablo_Methyls[[1]], comp.select = c(1:6), plot = FALSE)
@@ -198,17 +194,10 @@ random_permutations <- function(data_matrix_AD, metadata_AD, diablo_Methyls){
   KM_var = plotVar(diablo_Methyls[[2]], comp.select = c(1:6), plot = FALSE)
   KM_features = KM_var$names
   
-  PAM_var = plotVar(diablo_Methyls[[3]], comp.select = c(1:6), plot = FALSE)
-  PAM_features = PAM_var$names
-  
-  Spec_var = plotVar(diablo_Methyls[[4]], comp.select = c(1:6), plot = FALSE)
-  Spec_features = Spec_var$names
   
   df_shuffle = data.frame(matrix(nrow = 1, ncol = 12))
   colnames(df_shuffle) = c("HC_auc","HC_ratio", "HC_trueprop",
-                           "KM_auc","KM_ratio", "KM_trueprop",
-                           "PAM_auc","PAM_ratio", "PAM_trueprop",
-                           "Spec_auc","Spec_ratio", "Spec_trueprop")
+                           "KM_auc","KM_ratio", "KM_trueprop")
   #Generate random permutations of labeling from 100% random to 1% random
 for(i in c(rep(seq(from = 1, to = 0.1, by = -0.1), each = 10), 
                              rep(seq(from = 0.09, to = 0.01, by = -0.01),each = 10))){
@@ -227,30 +216,12 @@ for(i in c(rep(seq(from = 1, to = 0.1, by = -0.1), each = 10),
       df_random = data.frame(metadata_AD$KM_clusters, KM_shuffle)
       KM_prop = 1 - length(which(df_random[,1] == df_random[,2])) / nrow(metadata_AD)
       #Randomise outcomes
-      to_random = sample(seq(1:nrow(metadata_AD)), size = i*nrow(metadata_AD))
-      shuffle_clust = sample(metadata_AD[to_random,]$PAM_clusters)
-      PAM_shuffle = metadata_AD$PAM_clusters
-      PAM_shuffle[to_random] = shuffle_clust
-      df_random = data.frame(metadata_AD$PAM_clusters, PAM_shuffle)
-      PAM_prop = 1 - length(which(df_random[,1] == df_random[,2])) / nrow(metadata_AD)
-      #Randomise outcomes
-      to_random = sample(seq(1:nrow(metadata_AD)), size = i*nrow(metadata_AD))
-      shuffle_clust = sample(metadata_AD[to_random,]$Spec_clusters)
-      Spec_shuffle = metadata_AD$Spec_clusters
-      Spec_shuffle[to_random] = shuffle_clust
-      df_random = data.frame(metadata_AD$Spec_clusters, Spec_shuffle)
-      Spec_prop = 1 - length(which(df_random[,1] == df_random[,2])) / nrow(metadata_AD)
-      #Make new models with random outcome
       diablo_shuffles = list()
       diablo_shuffles[[1]] = mixOmics::splsda(t(data_matrix_AD), HC_shuffle, keepX=c(2000,2000,2000,2000,2000,2000), ncomp = 6)
       diablo_shuffles[[2]] = mixOmics::splsda(t(data_matrix_AD), KM_shuffle, keepX=c(2000,2000,2000,2000,2000,2000), ncomp = 6)
-      diablo_shuffles[[3]] = mixOmics::splsda(t(data_matrix_AD), PAM_shuffle, keepX=c(2000,2000,2000,2000,2000,2000), ncomp = 6)
-      diablo_shuffles[[4]] = mixOmics::splsda(t(data_matrix_AD), Spec_shuffle, keepX=c(2000,2000,2000,2000,2000,2000), ncomp = 6)
       #Calculate stats
       HC_roc = auroc(diablo_shuffles[[1]], plot = FALSE, print = FALSE)
       KM_roc = auroc(diablo_shuffles[[2]], plot = FALSE, print = FALSE)
-      PAM_roc = auroc(diablo_shuffles[[3]], plot = FALSE, print = FALSE)
-      Spec_roc = auroc(diablo_shuffles[[4]], plot = FALSE, print = FALSE)
       
       #Extract top features of random models
       HC_shuffle_var = plotVar(diablo_shuffles[[1]], comp.select = c(1:6), plot = FALSE)
@@ -259,22 +230,13 @@ for(i in c(rep(seq(from = 1, to = 0.1, by = -0.1), each = 10),
       KM_shuffle_var = plotVar(diablo_shuffles[[2]], comp.select = c(1:6), plot = FALSE)
       KM_shuffle_features = KM_shuffle_var$names
       
-      PAM_shuffle_var = plotVar(diablo_shuffles[[3]], comp.select = c(1:6), plot = FALSE)
-      PAM_shuffle_features = PAM_shuffle_var$names
-      
-      Spec_shuffle_var = plotVar(diablo_shuffles[[4]], comp.select = c(1:6), plot = FALSE)
-      Spec_shuffle_features = Spec_shuffle_var$names
       
       #Intersect of features between original model and randomized model
       HC_inter = intersect(HC_features, HC_shuffle_features)
       KM_inter = intersect(KM_features, KM_shuffle_features)
-      PAM_inter = intersect(PAM_features, PAM_shuffle_features)
-      Spec_inter = intersect(Spec_features, Spec_shuffle_features)
       
       shuffle_res = c(mean(HC_roc$Comp4[,1]), length(HC_inter)/length(HC_features), HC_prop,
-                      mean(KM_roc$Comp4[,1]), length(KM_inter)/length(KM_features), KM_prop,
-                      mean(PAM_roc$Comp4[,1]), length(PAM_inter)/length(PAM_features), PAM_prop,
-                      mean(Spec_roc$Comp4[,1]), length(Spec_inter)/length(Spec_features), Spec_prop)
+                      mean(KM_roc$Comp4[,1]), length(KM_inter)/length(KM_features), KM_prop)
       df_shuffle = rbind(df_shuffle,shuffle_res)
   }
   return(df_shuffle) 
@@ -284,48 +246,29 @@ for(i in c(rep(seq(from = 1, to = 0.1, by = -0.1), each = 10),
 output_permutation <- function(df_shuffle, dirname){
   
   # Output models of accuracy vs intersect of features, useless?
-  ggplot(data = df_shuffle, aes(x = HC_accuracy, y = HC_intersect)) +
-    geom_point() +
-    xlim(0,1) + ylim(0,1) +
-    theme_minimal()
-  ggsave(paste0("./results/",dirname,"/HClust/HC_acc.jpeg"))
-  ggplot(data = df_shuffle, aes(x = KM_accuracy, y = KM_intersect)) +
-    geom_point() +
-    xlim(0,1) + ylim(0,1) +
-    theme_minimal()
-  ggsave(paste0("./results/",dirname,"/Kmeans/KM_acc.jpeg"))
-  ggplot(data = df_shuffle, aes(x = PAM_accuracy, y = PAM_intersect)) +
-    geom_point() +
-    xlim(0,1) + ylim(0,1) +
-    theme_minimal()
-  ggsave(paste0("./results/",dirname,"/PAM/PAM_acc.jpeg"))
-  ggplot(data = df_shuffle, aes(x = Spec_accuracy, y = Spec_intersect)) +
-    geom_point() +
-    xlim(0,1) + ylim(0,1) +
-    theme_minimal()
-  ggsave(paste0("./results/",dirname,"/Spectrum/Spec_acc.jpeg"))
+  # ggplot(data = df_shuffle, aes(x = HC_accuracy, y = HC_intersect)) +
+  #   geom_point() +
+  #   xlim(0,1) + ylim(0,1) +
+  #   theme_minimal()
+  # ggsave(paste0("./results/",dirname,"/HClust/HC_acc.jpeg"))
+  # ggplot(data = df_shuffle, aes(x = KM_accuracy, y = KM_intersect)) +
+  #   geom_point() +
+  #   xlim(0,1) + ylim(0,1) +
+  #   theme_minimal()
+  # ggsave(paste0("./results/",dirname,"/Kmeans/KM_acc.jpeg"))
   
   # Output models of proportion of randomized outcome vs prop of shared features
   df_shuffle$prop = rep(c(seq(from = 1, to = 0.1, by = -0.1), seq(from = 0.09, to = 0.01, by = -0.01)), each = 10)
   
   ggplot(data = df_shuffle, aes(x = prop, y = HC_intersect)) +
-    geom_point() +
-    xlim(1,0) + ylim(0,1) +
+    geom_point() + xlab("Proportion of randomised labels") + ylab("Overlap with original key features") +
+    xlim(1,0) + ylim(0,1) + scale_x_reverse(labels = scales::percent, breaks = seq(1,0, by = -0.1)) + scale_y_continuous(labels = scales::percent) +
     theme_minimal()
-  ggsave(paste0("./results/", dirname, "/HClust/HC_prop.jpeg"))
+  ggsave(paste0("./results/", dirname, "/HClust/HC_prop.jpeg"), width = 1200, height = 850, units = "px")
   ggplot(data = df_shuffle, aes(x = prop, y = KM_intersect)) +
-    geom_point() +
-    xlim(1,0) + ylim(0,1) +
+    geom_point() + xlab("Proportion of randomised labels") + ylab("Overlap with original key features") +
+    xlim(1,0) + ylim(0,1) + scale_x_reverse(labels = scales::percent, breaks = seq(1,0, by = -0.1)) + scale_y_continuous(labels = scales::percent) +
     theme_minimal()
-  ggsave(paste0("./results/", dirname, "/Kmeans/KM_prop.jpeg"))
-  ggplot(data = df_shuffle, aes(x = prop, y = PAM_intersect)) +
-    geom_point() +
-    xlim(1,0) + ylim(0,1) +
-    theme_minimal()
-  ggsave(paste0("./results/", dirname, "/PAM/PAM_prop.jpeg"))
-  ggplot(data = df_shuffle, aes(x = prop, y = Spec_intersect)) +
-    geom_point() +
-    xlim(1,0) + ylim(0,1) +
-    theme_minimal()
-  ggsave(paste0("./results/", dirname, "/Spectrum/Spec_prop.jpeg"))
+  ggsave(paste0("./results/", dirname, "/Kmeans/KM_prop.jpeg"), width = 1200, height = 850, units = "px")
+
 }

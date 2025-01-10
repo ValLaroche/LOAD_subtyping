@@ -9,7 +9,11 @@ library(limma)
 library(muscat)
 library(purrr)
 library(scater)
-
+library(speckle)
+library(GeneOverlap)
+library(clusterProfiler)
+library(scales)
+load("new_scRNA_MIC_res.Rdata")
 #### Load data ####
 pheno_ROSMAP_scrna = readRDS("./scRNA/ROSMAP.ImmuneCells.6regions.snRNAseq.meta.rds")
 
@@ -22,6 +26,12 @@ pheno_ROSMAP = pheno_ROSMAP[pheno_ROSMAP$individualID %in% meta_ROSMAP_scRNA$ind
 pheno_ROSMAP_scrna = pheno_ROSMAP_scrna[pheno_ROSMAP_scrna$brainRegion == "PFC",]
 pheno_ROSMAP_scrna = pheno_ROSMAP_scrna[pheno_ROSMAP_scrna$subject %in% meta_ROSMAP_scRNA$subject,]  
 pheno_ROSMAP_scrna = pheno_ROSMAP_scrna[!pheno_ROSMAP_scrna$seurat_clusters %in% c(9,13,14,15),]
+
+meta_ROSMAP_scRNA$AD3types = pheno_ROSMAP_scrna[match(meta_ROSMAP_scRNA$subject, pheno_ROSMAP_scrna$subject),]$ADdiag3types
+pheno_ROSMAP$AD3type = meta_ROSMAP_scRNA[match(pheno_ROSMAP$individualID, meta_ROSMAP_scRNA$individualID),]$AD3type
+
+pheno_ROSMAP$individualID
+meta_ROSMAP_scRNA$individualID
 
 scRNA_MIC = readRDS("scRNA/ROSMAP.ImmuneCells.6regions.snRNAseq.counts.rds")
 scRNA_MIC = scRNA_MIC[,colnames(scRNA_MIC) %in% rownames(pheno_ROSMAP_scrna)]
@@ -57,8 +67,14 @@ pheno_ROSMAP_scrna_RvC = pheno_ROSMAP_scrna[pheno_ROSMAP_scrna$subtype %in% c("r
 scRNA_counts_RvC = scRNA_counts[,colnames(scRNA_counts) %in% rownames(pheno_ROSMAP_scrna_RvC)]
 pheno_ROSMAP_scrna_BvC = pheno_ROSMAP_scrna[pheno_ROSMAP_scrna$subtype %in% c("blue","Control"),]
 scRNA_counts_BvC = scRNA_counts[,colnames(scRNA_counts) %in% rownames(pheno_ROSMAP_scrna_BvC)]
+pheno_ROSMAP_scrna_RvB = pheno_ROSMAP_scrna[pheno_ROSMAP_scrna$subtype %in% c("red","blue"),]
+scRNA_counts_RvB = scRNA_counts[,colnames(scRNA_counts) %in% rownames(pheno_ROSMAP_scrna_RvB)]
 
 #### Analysis ####
+scRNA_sce = SingleCellExperiment(scRNA_counts)
+names(assays(scRNA_sce)) = "counts"
+scRNA_sce <- computeLibraryFactors(scRNA_sce)
+scRNA_sce <- logNormCounts(scRNA_sce)
 
 scRNA_sce_RvC = SingleCellExperiment(scRNA_counts_RvC)
 names(assays(scRNA_sce_RvC)) = "counts"
@@ -70,58 +86,101 @@ names(assays(scRNA_sce_BvC)) = "counts"
 scRNA_sce_BvC <- computeLibraryFactors(scRNA_sce_BvC)
 scRNA_sce_BvC <- logNormCounts(scRNA_sce_BvC)
 
+scRNA_sce_RvB = SingleCellExperiment(scRNA_counts_RvB)
+names(assays(scRNA_sce_RvB)) = "counts"
+scRNA_sce_RvB <- computeLibraryFactors(scRNA_sce_RvB)
+scRNA_sce_RvB <- logNormCounts(scRNA_sce_RvB)
 
-remove(scRNA_MIC, scRNA_counts, scRNA_counts_BvC, scRNA_counts_RvC)
 gc()
 
 #### UMAP ####
 
+scRNA_sce@colData$cluster_id = pheno_ROSMAP_scrna$celltype
+scRNA_sce@colData$subject = pheno_ROSMAP_scrna$subject
+scRNA_sce@colData$group_id = pheno_ROSMAP[match(scRNA_sce@colData$subject, pheno_ROSMAP$subject),]$diag
+scRNA_sce@colData$gender = pheno_ROSMAP_scrna$msex
+scRNA_sce@colData$pmi = pheno_ROSMAP_scrna$pmi
+scRNA_sce@colData$age_death = pheno_ROSMAP_scrna$age_death
+scRNA_sce@colData$sample_id = paste(scRNA_sce$group_id, scRNA_sce$subject, sep = "_")
+
 scRNA_sce_RvC@colData$cluster_id = pheno_ROSMAP_scrna_RvC$celltype
 scRNA_sce_RvC@colData$group_id = pheno_ROSMAP_scrna_RvC$subtype
 scRNA_sce_RvC@colData$sample_id = paste(pheno_ROSMAP_scrna_RvC$subtype, pheno_ROSMAP_scrna_RvC$subject, sep = "_")
+scRNA_sce_RvC@colData$gender = pheno_ROSMAP_scrna_RvC$msex
+scRNA_sce_RvC@colData$pmi = pheno_ROSMAP_scrna_RvC$pmi
+scRNA_sce_RvC@colData$age_death = pheno_ROSMAP_scrna_RvC$age_death
+
 scRNA_sce_BvC@colData$cluster_id = pheno_ROSMAP_scrna_BvC$celltype
 scRNA_sce_BvC@colData$group_id = pheno_ROSMAP_scrna_BvC$subtype
 scRNA_sce_BvC@colData$sample_id = paste(pheno_ROSMAP_scrna_BvC$subtype, pheno_ROSMAP_scrna_BvC$subject, sep = "_")
+scRNA_sce_BvC@colData$gender = pheno_ROSMAP_scrna_BvC$msex
+scRNA_sce_BvC@colData$pmi = pheno_ROSMAP_scrna_BvC$pmi
+scRNA_sce_BvC@colData$age_death = pheno_ROSMAP_scrna_BvC$age_death
+
+scRNA_sce_RvB@colData$cluster_id = pheno_ROSMAP_scrna_RvB$celltype
+scRNA_sce_RvB@colData$group_id = pheno_ROSMAP_scrna_RvB$subtype
+scRNA_sce_RvB@colData$sample_id = paste(pheno_ROSMAP_scrna_RvB$subtype, pheno_ROSMAP_scrna_RvB$subject, sep = "_")
+scRNA_sce_RvB@colData$gender = pheno_ROSMAP_scrna_RvB$msex
+scRNA_sce_RvB@colData$pmi = pheno_ROSMAP_scrna_RvB$pmi
+scRNA_sce_RvB@colData$age_death = pheno_ROSMAP_scrna_RvB$age_death
+
+
+
+table_MIC_cells_RvC = as.data.frame(t(table(scRNA_sce_RvC$cluster_id, scRNA_sce_RvC$sample_id)))
+table_MIC_cells_RvC = dcast(data = table_MIC_cells_RvC,formula = Var1~Var2,fun.aggregate = sum,value.var = "Freq")
+
+table_MIC_cells_BvC = as.data.frame(t(table(scRNA_sce_BvC$cluster_id, scRNA_sce_BvC$sample_id)))
+table_MIC_cells_BvC = dcast(data = table_MIC_cells_BvC,formula = Var1~Var2,fun.aggregate = sum,value.var = "Freq")
+
+table_MIC_cells_ADvC = as.data.frame(t(table(scRNA_sce$cluster_id, scRNA_sce$sample_id)))
+table_MIC_cells_ADvC = dcast(data = table_MIC_cells_ADvC,formula = Var1~Var2,fun.aggregate = sum,value.var = "Freq")
+
+table_MIC_cells_ADvC = table_MIC_cells_ADvC %>% separate(Var1, c('diag', 'id'), sep = "_")
+table_MIC_cells_RvC = table_MIC_cells_RvC %>% separate(Var1, c('diag', 'id'), sep = "_")
+table_MIC_cells_BvC = table_MIC_cells_BvC %>% separate(Var1, c('diag', 'id'), sep = "_")
+
+table_all_MIC_cells = rbind(table_MIC_cells_ADvC, 
+                            table_MIC_cells_RvC[table_MIC_cells_RvC$diag == "red",],
+                            table_MIC_cells_BvC[table_MIC_cells_BvC$diag == "blue",])
 
 scRNA_sce_RvC = prepSCE(scRNA_sce_RvC)
 t(table(scRNA_sce_RvC$cluster_id, scRNA_sce_RvC$sample_id))
 
-scRNA_sce_RvC <- runUMAP(scRNA_sce_RvC, pca = 20)
-
-plot_dr <- function(sce, dr, col){
-  plotReducedDim(sce, dimred = dr, colour_by = col) +
-  guides(fill = guide_legend(override.aes = list(alpha = 1, size = 3))) +
-  theme_minimal() + theme(aspect.ratio = 1)
-}
-
-cs_by_k <- split(colnames(scRNA_sce_RvC), scRNA_sce_RvC$cluster_id)
-cs100 <- unlist(sapply(cs_by_k, function(u) sample(u, min(length(u), 100))))
-
-# plot t-SNE & UMAP colored by cluster & group ID
-for (dr in c("UMAP")){ 
-  for (col in c("cluster_id", "group_id")){ 
-    plot(plot_dr(scRNA_sce_RvC[, cs100], dr, col))
-  }
-}
-###
+# scRNA_sce_RvC <- runUMAP(scRNA_sce_RvC, pca = 20)
+# 
+# plot_dr <- function(sce, dr, col){
+#   plotReducedDim(sce, dimred = dr, colour_by = col) +
+#   guides(fill = guide_legend(override.aes = list(alpha = 1, size = 3))) +
+#   theme_minimal() + theme(aspect.ratio = 1)
+# }
+# 
+# cs_by_k <- split(colnames(scRNA_sce_RvC), scRNA_sce_RvC$cluster_id)
+# cs100 <- unlist(sapply(cs_by_k, function(u) sample(u, min(length(u), 100))))
+# 
+# # plot t-SNE & UMAP colored by cluster & group ID
+# for (dr in c("UMAP")){ 
+#   for (col in c("cluster_id", "group_id")){ 
+#     plot(plot_dr(scRNA_sce_RvC[, cs100], dr, col))
+#   }
+# }
+# ###
 
 scRNA_sce_BvC = prepSCE(scRNA_sce_BvC)
 t(table(scRNA_sce_BvC$cluster_id, scRNA_sce_BvC$sample_id))
 
-scRNA_sce_BvC <- runUMAP(scRNA_sce_BvC, pca = 20)
-
-cs_by_k <- split(colnames(scRNA_sce_BvC), scRNA_sce_BvC$cluster_id)
-cs100 <- unlist(sapply(cs_by_k, function(u) sample(u, min(length(u), 100))))
-
-# plot t-SNE & UMAP colored by cluster & group ID
-for (dr in c("UMAP")){ 
-  for (col in c("cluster_id", "group_id")){ 
-    plot(plot_dr(scRNA_sce_BvC[, cs100], dr, col))
-  }
-}
-
-#### Pseudobulk ####
-
+# scRNA_sce_BvC <- runUMAP(scRNA_sce_BvC, pca = 20)
+# 
+# cs_by_k <- split(colnames(scRNA_sce_BvC), scRNA_sce_BvC$cluster_id)
+# cs100 <- unlist(sapply(cs_by_k, function(u) sample(u, min(length(u), 100))))
+# 
+# # plot t-SNE & UMAP colored by cluster & group ID
+# for (dr in c("UMAP")){ 
+#   for (col in c("cluster_id", "group_id")){ 
+#     plot(plot_dr(scRNA_sce_BvC[, cs100], dr, col))
+#   }
+# }
+# 
+# #### Pseudobulk ####
 pb_RvC <- aggregateData(scRNA_sce_RvC,
                     assay = "counts", fun = "sum",
                     by = c("cluster_id", "sample_id"))
@@ -129,26 +188,32 @@ pb_RvC <- aggregateData(scRNA_sce_RvC,
 assayNames(pb_RvC)
 t(head(assay(pb_RvC)))
 
-pb_mds_RvC <- pbMDS(pb_RvC)
-plot(pb_mds_RvC)
+# pb_mds_RvC <- pbMDS(pb_RvC)
+# plot(pb_mds_RvC)
 
 #Filter by expr at the pseudobulk level
 #Filter gene is by expression, filter samples is outlier detection
-res_RvC <- pbDS(pb_RvC, min_cells = 10, filter = "both", verbose = TRUE)
+formula = ~group_id+gender+pmi+age_death
+cd = as.data.frame(colData(pb_RvC))
+cd2=cd[,c("group_id","gender","pmi","age_death")]
+design=model.matrix(formula,cd2)
+pb_RvC = pb_RvC[,rownames(design)]
+
+res_RvC <- pbDS(pb_RvC, design = design, min_cells = 10, filter = "both", verbose = TRUE, coef=as.list(2:5))
 tbl_RvC <- res_RvC$table[[1]]
-
-vapply(res_RvC$table$red, function(u)
-    sum(u$p_val < 0.01), numeric(1))
-
-
-tbl_RvC = lapply(tbl_RvC, function(u) 
-  filter(u, abs(logFC) > log2(1.2)))
-tbl_RvC = lapply(tbl_RvC, function(u) 
+# 
+# vapply(res_RvC$table$red, function(u)
+#     sum(u$p_val < 0.01), numeric(1))
+# 
+# 
+# tbl_RvC = lapply(tbl_RvC, function(u)
+#   filter(u, abs(logFC) > log2(1.2)))
+tbl_RvC = lapply(tbl_RvC, function(u)
   filter(u, p_val < 0.05))
 tbl_RvC
-
-gc()
-
+# 
+# gc()
+# 
 pb_BvC <- aggregateData(scRNA_sce_BvC,
                         assay = "counts", fun = "sum",
                         by = c("cluster_id", "sample_id"))
@@ -158,24 +223,68 @@ pb_BvC$group_id = factor(pb_BvC$group_id, levels = c("Control","blue"))
 assayNames(pb_BvC)
 t(head(assay(pb_BvC)))
 
-pb_mds_BvC <- pbMDS(pb_BvC)
-plot(pb_mds_BvC)
-
-metadata(pb_BvC)
+# pb_mds_BvC <- pbMDS(pb_BvC)
+# plot(pb_mds_BvC)
+# 
+# metadata(pb_BvC)
 
 #Filter gene is by expression, filter samples is outlier detection
-res_BvC <- pbDS(pb_BvC, min_cells = 10, filter = "both", verbose = TRUE)
+formula = ~group_id+gender+pmi+age_death
+cd = as.data.frame(colData(pb_BvC))
+cd2=cd[,c("group_id","gender","pmi","age_death")]
+design=model.matrix(formula,cd2)
+
+res_BvC <- pbDS(pb_BvC, design = design, min_cells = 10, filter = "none", verbose = TRUE, coef=as.list(2:5))
 tbl_BvC <- res_BvC$table[[1]]
 
-vapply(res_BvC$table$blue, function(u)
-  sum(u$p_val < 0.01), numeric(1))
-
-
-tbl_BvC = lapply(tbl_BvC, function(u) 
-  filter(u, abs(logFC) > log2(1.2)))
-tbl_BvC = lapply(tbl_BvC, function(u) 
+# vapply(res_BvC$table$blue, function(u)
+#   sum(u$p_val < 0.01), numeric(1))
+# 
+# # 
+# tbl_BvC = lapply(tbl_BvC, function(u)
+#   filter(u, abs(logFC) > log2(1.2)))
+tbl_BvC = lapply(tbl_BvC, function(u)
   filter(u, p_val < 0.05))
 tbl_BvC
+# 
+
+# RvB
+scRNA_sce_RvB = prepSCE(scRNA_sce_RvB)
+t(table(scRNA_sce_RvB$cluster_id, scRNA_sce_RvB$sample_id))
+pb_RvB <- aggregateData(scRNA_sce_RvB,
+                        assay = "counts", fun = "sum",
+                        by = c("cluster_id", "sample_id"))
+# one sheet per subpopulation
+assayNames(pb_RvB)
+t(head(assay(pb_RvB)))
+
+# pb_mds_RvB <- pbMDS(pb_RvB)
+# plot(pb_mds_RvB)
+
+#Filter by expr at the pseudobulk level
+#Filter gene is by expression, filter samples is outlier detection
+formula = ~group_id+gender+pmi+age_death
+cd = as.data.frame(colData(pb_RvB))
+cd2=cd[,c("group_id","gender","pmi","age_death")]
+design=model.matrix(formula,cd2)
+pb_RvB = pb_RvB[,rownames(design)]
+
+res_RvB <- pbDS(pb_RvB, design = design, min_cells = 10, filter = "both", verbose = TRUE, coef=as.list(2:5))
+tbl_RvB <- res_RvB$table[[1]]
+# 
+# vapply(res_RvB$table$red, function(u)
+#     sum(u$p_val < 0.01), numeric(1))
+# 
+# 
+# tbl_RvB = lapply(tbl_RvB, function(u)
+#   filter(u, abs(logFC) > log2(1.2)))
+tbl_RvB = lapply(tbl_RvB, function(u)
+  filter(u, p_val < 0.05))
+tbl_RvB
+
+
+
+
 
 # Check overlap between red and blue microglia state DEA results
 overlap_MIC_states = c()
@@ -273,7 +382,7 @@ table_res_melt[table_res_melt$group == "MIC",]$group = "Microglia state"
 table_res_melt[table_res_melt$group == "RED",]$group = "RED subtype"
 table_res_melt[table_res_melt$group == "BLUE",]$group = "BLUE subtype"
 
-table_res_melt = table_res_melt[!table_res_melt$cell_type %in% c("MIC 10", "MIC 12"),]
+table_res_melt = table_res_melt[!table_res_melt$cell_type == "MIC 12",]
 table_res_melt$group = factor(table_res_melt$group, levels = c("Microglia state", "BLUE subtype", "RED subtype"))
 table_res_melt$log_value = log(table_res_melt$value + 1)
 
@@ -285,12 +394,10 @@ ggplot(table_res_melt, aes(x = cell_type, y = log_value, fill = variable)) +
   geom_text(aes(label = if_else(pvalue < 1e-2,"*","")), position = position_dodge(width = 0.9), vjust = -0.5, size = 8) +
   geom_text(aes(y = -0.4, label =group ), position = position_dodge(width = 0.9), vjust = 0.5, angle = 90, size = 3) +
   scale_y_continuous(breaks = c(-2,0,1,2,3,4,5,6)) + ylim(-0.5,6) +
-  scale_x_discrete(labels=c("NeuN" = "Neuronal", "Olig" = "Oligodendrocytes",
-                            "Mic" = "Microglia","Ast" = "Astrocytes")) +
   xlab("Microglia state") + ylab("Number of significant genes") +
   # geom_hline(yintercept=1.05) + geom_hline(yintercept=1.15) +
   scale_fill_manual(values = c("black", "steelblue1", "brown2"), name = "Microglia enrichment",
-                      labels = c("Microglia state", "BLUE total cell state", "BLUE state specific", "RED total cell state", "RED state specific")) + 
+                      labels = c("Microglia state", "BLUE state specific", "RED state specific")) + 
   theme_bw() +
   theme(axis.text.x = element_text(size=10),
         axis.text.y=element_blank(),
@@ -356,3 +463,129 @@ for(i in intersect(names(overlap_MICstate_BLUE), names(overlap_MICstate_RED))){
   intersect_overlapRB = intersect_overlapRB[order(intersect_overlapRB$cluster_id, intersect_overlapRB$gene),]
 }
 
+scRNA_sce = prepSCE(scRNA_sce)
+pb_ADvC <- aggregateData(scRNA_sce,
+                        assay = "counts", fun = "sum",
+                        by = c("cluster_id", "sample_id"))
+pb_ADvC$group_id = factor(pb_ADvC$group_id, levels = c("Control","AD"))
+# one sheet per subpopulation
+
+assayNames(pb_ADvC)
+t(head(assay(pb_ADvC)))
+
+#Filter gene is by expression, filter samples is outlier detection
+formula = ~group_id+gender+pmi+age_death
+cd = as.data.frame(colData(pb_ADvC))
+cd2=cd[,c("group_id","gender","pmi","age_death")]
+design=model.matrix(formula,cd2)
+
+res_ADvC <- pbDS(pb_ADvC, design = design, min_cells = 10, filter = "both", verbose = TRUE, coef=as.list(2:5))
+tbl_ADvC <- res_ADvC$table[[1]]
+
+res_propeller_ADvC = propeller(clusters = scRNA_sce@colData$cluster_id, sample = scRNA_sce@colData$sample_id, 
+                               group = scRNA_sce@colData$group_id)
+res_propeller_RvC = propeller(clusters = scRNA_sce_RvC@colData$cluster_id, sample = scRNA_sce_RvC@colData$sample_id, 
+                               group = scRNA_sce_RvC@colData$group_id)
+res_propeller_BvC = propeller(clusters = scRNA_sce_BvC@colData$cluster_id, sample = scRNA_sce_BvC@colData$sample_id, 
+                               group = scRNA_sce_BvC@colData$group_id)
+res_propeller_RvB = propeller(clusters = scRNA_sce_RvB@colData$cluster_id, sample = scRNA_sce_RvB@colData$sample_id, 
+                              group = scRNA_sce_RvB@colData$group_id)
+
+
+# Plot cell type proportions
+plotCellTypeProps(clusters = scRNA_sce@colData$cluster_id, sample = scRNA_sce@colData$sample_id)
+plotCellTypeProps(clusters = scRNA_sce_RvC@colData$cluster_id, sample = scRNA_sce_RvC@colData$sample_id)
+plotCellTypeProps(clusters = scRNA_sce_BvC@colData$cluster_id, sample = scRNA_sce_BvC@colData$sample_id)
+
+
+# Differential expression subtypes
+for(mg_state in names(tbl_ADvC)){
+  print(mg_state)
+  if(mg_state %in% names(tbl_BvC)){
+    tS1 = tbl_BvC[[mg_state]] 
+  }
+  if(mg_state %in% names(tbl_RvC)){
+    tS2 = tbl_RvC[[mg_state]]
+  }
+    
+    
+    
+  if(mg_state %in% names(tbl_RvC) & mg_state %in% names(tbl_BvC)){
+    backg = min(nrow(tS1), nrow(tS2))
+    
+    tS1 = tS1[tS1$p_val < 0.05 & abs(tS1$logFC) > log2(1.2),]
+    tS2 = tS2[tS2$p_val < 0.05 & abs(tS2$logFC) > log2(1.2),]
+    to_compare = newGeneOverlap(tS1$gene, tS2$gene, backg, spec = "hg19.gene")
+    print(testGeneOverlap(to_compare))
+  }
+    
+  if(mg_state %in% names(tbl_BvC)){
+    tS1 = tS1[tS1$p_val < 0.05 & abs(tS1$logFC) > log2(1.2),]
+    tS1 = tS1[order(tS1$p_val),]
+    tS1_glist = sort(tS1$gene, decreasing = T)
+    res_MIC2_S1 = enrichGO(tS1_glist, OrgDb = "org.Hs.eg.db", 
+                           ont = "ALL", keyType = "SYMBOL",
+                           pAdjustMethod = "bonferroni",
+                           pvalueCutoff  = 1,
+                           qvalueCutoff  = 1)
+    
+    GO_MIC2_S1 = res_MIC2_S1@result
+    GO_MIC2_S1$count = as.numeric(str_split_fixed(GO_MIC2_S1$GeneRatio, "/", n =2)[,1])
+    GO_MIC2_S1$total = as.numeric(str_split_fixed(GO_MIC2_S1$GeneRatio, "/", n =2)[,2])
+    GO_MIC2_S1$ratio = GO_MIC2_S1$count / GO_MIC2_S1$total
+    GO_MIC2_S1 = GO_MIC2_S1[GO_MIC2_S1$p.adjust < 0.05,]
+    
+    val = min(20, nrow(GO_MIC2_S1))
+    GO_MIC2_S1_plot = GO_MIC2_S1[1:val,]
+    GO_MIC2_S1_plot = GO_MIC2_S1_plot[order(GO_MIC2_S1_plot$ratio, decreasing = T),]
+    GO_MIC2_S1_plot$Description = factor(GO_MIC2_S1_plot$Description, levels = GO_MIC2_S1_plot$Description)
+    plot(ggplot(GO_MIC2_S1_plot, aes(x = ratio, y = rev(Description), colour = p.adjust)) +
+      geom_point(aes(size = count)) +
+      ggtitle(paste0(mg_state, " - LOADS1")) +
+      scale_size_continuous(range = c(2,8))+
+      scale_color_gradient2(low = "#DA2A2A", mid = "grey80", high = "#4483B8", midpoint = mean(GO_MIC2_S1_plot$p.adjust)) +
+      scale_y_discrete(labels = label_wrap(70)) +
+      theme_bw() + xlab("Gene Ratio") + ylab("Pathway") +
+      theme(axis.text.y = element_text(size = 10)))
+  }
+  if(mg_state %in% names(tbl_RvC)){
+    tS2 = tS2[tS2$p_val < 0.05 & abs(tS2$logFC) > log2(1.2),]
+    tS2 = tS2[order(tS2$p_val),]
+    tS2_glist = sort(tS2$gene, decreasing = T)
+    res_MIC2_S2 = clusterProfiler::enrichGO(tS2_glist, OrgDb = "org.Hs.eg.db", 
+                                            ont = "ALL", keyType = "SYMBOL",
+                                            pAdjustMethod = "bonferroni",
+                                            pvalueCutoff  = 1,
+                                            qvalueCutoff  = 1)
+    GO_MIC2_S2 = res_MIC2_S2@result
+    GO_MIC2_S2$count = as.numeric(str_split_fixed(GO_MIC2_S2$GeneRatio, "/", n =2)[,1])
+    GO_MIC2_S2$total = as.numeric(str_split_fixed(GO_MIC2_S2$GeneRatio, "/", n =2)[,2])
+    GO_MIC2_S2$ratio = GO_MIC2_S2$count / GO_MIC2_S2$total
+    GO_MIC2_S2 = GO_MIC2_S2[GO_MIC2_S2$p.adjust < 0.05,]
+    
+    val = min(20, nrow(GO_MIC2_S2))
+    GO_MIC2_S2_plot = GO_MIC2_S2[1:val,]
+    GO_MIC2_S2_plot = GO_MIC2_S2_plot[order(GO_MIC2_S2_plot$ratio, decreasing = T),]
+    GO_MIC2_S2_plot$Description = factor(GO_MIC2_S2_plot$Description, levels = GO_MIC2_S2_plot$Description)
+    plot(ggplot(GO_MIC2_S2_plot, aes(x = ratio, y = rev(Description), colour = p.adjust)) +
+      ggtitle(paste0(mg_state, " - LOADS2")) +
+      geom_point(aes(size = count)) +
+      scale_size_continuous(range = c(2,8))+
+      scale_color_gradient2(low = "#DA2A2A", mid = "grey80", high = "#4483B8", midpoint = mean(GO_MIC2_S2_plot$p.adjust)) +
+      scale_y_discrete(labels = label_wrap(70)) +
+      theme_bw() + xlab("Gene Ratio") + ylab("Pathway") +
+      theme(axis.text.y = element_text(size = 10)))
+    
+    
+  }
+}
+
+sig_tbl_S1 = lapply(tbl_BvC, function(u) filter(u, abs(logFC) > log2(1.2)))
+sig_tbl_S1 = lapply(sig_tbl_S1, function(u) filter(u, p_val < 0.05))
+sig_tbl_S2 = lapply(tbl_RvC, function(u) filter(u, abs(logFC) > log2(1.2)))
+sig_tbl_S2 = lapply(sig_tbl_S2, function(u) filter(u, p_val < 0.05))
+
+list_gene_S1 = unique(unlist(lapply(sig_tbl_S1, function(u) c(u$gene))))
+list_gene_S2 = unique(unlist(lapply(sig_tbl_S2, function(u) c(u$gene))))
+
+intersect(list_gene_S1, list_gene_S2)
